@@ -1,0 +1,26 @@
+{
+  "name": "hidden-coefficients",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "『変数を見極めろ』— ノイズ込みの観測データから隠れた係数構造を推定するシミュレーションゲーム",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.11",
+    "vitest": "^2.1.8"
+  }
+}
