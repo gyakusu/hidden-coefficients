@@ -1,7 +1,9 @@
+import type { ReactNode } from 'react'
 import * as C from '../game/config'
 import { trustNorm } from '../game/engine'
 import type { GameState } from '../game/types'
 import HistoryChart from './HistoryChart'
+import { ACTIVITY_META, Icon } from './ui'
 
 function gradeFor(score: number) {
   return C.GRADES.find((g) => score >= g.min) ?? C.GRADES[C.GRADES.length - 1]
@@ -24,6 +26,16 @@ function analyze(state: GameState) {
   }
 }
 
+/** 種明かしテーブルの 1 行。アイコンは ACTIVITY_META か個別指定。 */
+function RevealName({ icon, color, children }: { icon: string; color: string; children: ReactNode }) {
+  return (
+    <span className="end__table-name">
+      <Icon name={icon} size={18} style={{ color }} />
+      {children}
+    </span>
+  )
+}
+
 export default function EndScreen({
   state,
   onReplay,
@@ -36,11 +48,14 @@ export default function EndScreen({
   const score = state.cumulativeOutcome
   const grade = gradeFor(score)
   const a = analyze(state)
+  const m = ACTIVITY_META
 
   return (
     <div className="end">
       <div className="end__inner">
-        <p className="end__phase">10年目・説明フェーズ</p>
+        <p className="end__phase">
+          <Icon name="menu_book" size={16} />10年目・説明フェーズ
+        </p>
         <h1 className="end__h1">10年間の同定、完了。</h1>
 
         <div className={`end__scorecard rank-${grade.rank}`}>
@@ -58,7 +73,7 @@ export default function EndScreen({
         <HistoryChart history={state.history} />
 
         <section className="end__section card">
-          <h2>あなたのプレイ分析</h2>
+          <h2><Icon name="insights" size={18} />あなたのプレイ分析</h2>
           <ul className="end__analysis">
             <li>
               VA提案のゲートが開き始めたのは
@@ -82,7 +97,7 @@ export default function EndScreen({
         </section>
 
         <section className="end__section card">
-          <h2>種明かし：隠されていた構造</h2>
+          <h2><Icon name="lock_open" size={18} />種明かし：隠されていた構造</h2>
           <p className="end__reveal-lead">
             あなたが観測していた「成果」は、次の関数にノイズを掛けたものだった。
           </p>
@@ -97,37 +112,37 @@ export default function EndScreen({
             </thead>
             <tbody>
               <tr>
-                <td>会議</td>
+                <td><RevealName icon={m.meeting.icon} color={m.meeting.accent}>会議</RevealName></td>
                 <td>{C.COEF.meetingBase}〜{(C.COEF.meetingBase + C.COEF.meetingDocsBoost).toFixed(3)}</td>
                 <td>ほぼ定数（ダミー）</td>
                 <td>最低200回の縛りで埋めるだけ。資料作成で「多少」上がるが、誤差。</td>
               </tr>
               <tr>
-                <td>資料作成</td>
+                <td><RevealName icon={m.docs.icon} color={m.docs.accent}>資料作成</RevealName></td>
                 <td>{C.COEF.docs}</td>
                 <td>弱い変数</td>
                 <td>単体は小。会議への弱い交差項で「効いた気」にさせる罠。</td>
               </tr>
               <tr>
-                <td>現場訪問</td>
+                <td><RevealName icon={m.visit.icon} color={m.visit.accent}>現場訪問</RevealName></td>
                 <td>{C.COEF.visit}</td>
                 <td>中程度の変数</td>
                 <td>成果も信頼も稼ぐ優等生。序盤の安定札。</td>
               </tr>
               <tr className="is-key">
-                <td>VA提案</td>
+                <td><RevealName icon={m.va.icon} color={m.va.accent}>VA提案</RevealName></td>
                 <td>{C.COEF.va}（ゲート開）／ 0（ゲート閉）</td>
                 <td>真の主力変数</td>
                 <td>信頼が閾値（正規化 {C.VA_GATE_START}〜{C.VA_GATE_FULL}）を越えて初めて立ち上がる。</td>
               </tr>
               <tr>
-                <td>報告</td>
+                <td><RevealName icon={m.report.icon} color={m.report.accent}>報告</RevealName></td>
                 <td>{C.COEF.report}</td>
                 <td>定数（直接成果ゼロ）</td>
                 <td>だが信頼ptの最大の源泉。「効かない」のに最重要だった。</td>
               </tr>
               <tr>
-                <td>部署の力（人数/意識）</td>
+                <td><RevealName icon="diversity_3" color={m.develop.accent}>部署の力</RevealName></td>
                 <td>×{C.AWARENESS_BASE} → 最大 ×{C.AWARENESS_MAX}</td>
                 <td>定数 → 変数（昇進）</td>
                 <td>昇進までは固定。育成で初めて動かせる「隠れ倍率」に。</td>
@@ -147,7 +162,7 @@ export default function EndScreen({
           </ul>
         </section>
 
-        <section className="end__section end__theme">
+        <section className="end__section end__theme card">
           <p>
             効くと思ったら効かない。効かないと思ったら、前提次第で効く。
             周囲との関係そのものが、成果を左右する<strong>隠れた変数</strong>だった。
@@ -156,11 +171,11 @@ export default function EndScreen({
         </section>
 
         <div className="end__actions">
-          <button type="button" className="btn btn--primary btn--big" onClick={onReplay}>
-            もう一度プレイ ▶
+          <button type="button" className="btn btn--primary btn--big btn--icon" onClick={onReplay}>
+            <Icon name="replay" size={22} />もう一度プレイ
           </button>
-          <button type="button" className="btn btn--ghost" onClick={onTitle}>
-            タイトルへ
+          <button type="button" className="btn btn--ghost btn--icon" onClick={onTitle}>
+            <Icon name="home" size={20} />タイトルへ
           </button>
         </div>
       </div>
