@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react'
 import type { ActivityKey } from '../game/types'
 
 /** アクティビティの表示メタ情報（係数は明かさない＝制約と所要時間のみ）。 */
@@ -9,20 +10,23 @@ export interface ActivityMeta {
   /** 昇進後のみ解放。 */
   promotedOnly?: boolean
   accent: string
+  /** Google Material Symbols のアイコン名。 */
+  icon: string
 }
 
 export const ACTIVITIES: ActivityMeta[] = [
-  { key: 'meeting', label: '会議', note: '2h/回・最低200回（=400h）必須', accent: '#7c8aa5' },
-  { key: 'docs', label: '資料作成', note: '任意時間', accent: '#6aa0c4' },
-  { key: 'visit', label: '現場訪問', note: '8h/回・信頼ptを稼ぐ', accent: '#4db6a8' },
-  { key: 'va', label: 'VA提案', note: '4h/回', accent: '#e0a458' },
-  { key: 'report', label: '報告', note: '任意時間・信頼ptを稼ぐ', accent: '#a78bc0' },
+  { key: 'meeting', label: '会議', note: '2h/回・最低200回必須', accent: '#7c8aa5', icon: 'groups' },
+  { key: 'docs', label: '資料作成', note: '任意時間', accent: '#6aa0c4', icon: 'description' },
+  { key: 'visit', label: '現場訪問', note: '8h/回・信頼を稼ぐ', accent: '#4db6a8', icon: 'engineering' },
+  { key: 'va', label: 'VA提案', note: '4h/回', accent: '#e0a458', icon: 'lightbulb' },
+  { key: 'report', label: '報告', note: '任意時間・信頼を稼ぐ', accent: '#a78bc0', icon: 'campaign' },
   {
     key: 'develop',
     label: '育成',
-    note: '任意時間・昇進後に解放',
+    note: '任意時間・翌年以降に効く',
     promotedOnly: true,
     accent: '#d2728f',
+    icon: 'school',
   },
 ]
 
@@ -34,24 +38,58 @@ export const ACTIVITY_META: Record<ActivityKey, ActivityMeta> = ACTIVITIES.reduc
   {} as Record<ActivityKey, ActivityMeta>,
 )
 
+/** Google Material Symbols のアイコン。 */
+export function Icon({
+  name,
+  className = '',
+  fill = true,
+  size,
+  style,
+}: {
+  name: string
+  className?: string
+  fill?: boolean
+  size?: number
+  style?: CSSProperties
+}) {
+  return (
+    <span
+      className={`msym ${className}`}
+      aria-hidden="true"
+      style={{
+        fontVariationSettings: `'FILL' ${fill ? 1 : 0}, 'wght' 400, 'GRAD' 0, 'opsz' ${size ?? 24}`,
+        ...(size ? { fontSize: size } : null),
+        ...style,
+      }}
+    >
+      {name}
+    </span>
+  )
+}
+
 export function Meter({
   value,
   max = 1,
   label,
   detail,
   color,
+  icon,
 }: {
   value: number
   max?: number
   label: string
   detail?: string
   color: string
+  icon?: string
 }) {
   const pct = Math.max(0, Math.min(100, (value / max) * 100))
   return (
     <div className="meter">
       <div className="meter__head">
-        <span className="meter__label">{label}</span>
+        <span className="meter__label">
+          {icon && <Icon name={icon} className="meter__icon" size={16} />}
+          {label}
+        </span>
         {detail && <span className="meter__detail">{detail}</span>}
       </div>
       <div className="meter__track">

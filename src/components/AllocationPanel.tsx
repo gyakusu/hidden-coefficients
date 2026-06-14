@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import * as C from '../game/config'
 import { meetingMinHours, totalAllocated } from '../game/engine'
 import type { Allocation, ActivityKey, GameState } from '../game/types'
-import { ACTIVITIES } from './ui'
+import { ACTIVITIES, Icon } from './ui'
 
 const STEP = 50
 
@@ -62,10 +62,12 @@ export default function AllocationPanel({
   return (
     <section className="alloc card">
       <div className="alloc__head">
-        <h2>今年の時間配分</h2>
+        <h2>
+          <Icon name="schedule" size={18} />今年の時間配分
+        </h2>
         <div className={`alloc__remaining ${balanced ? 'is-ok' : 'is-warn'}`}>
-          残り <strong>{remaining}</strong> h
-          <span className="alloc__total">（{total} / {C.TOTAL_HOURS}h）</span>
+          残り <strong>{remaining}</strong>h
+          <span className="alloc__total">{total}/{C.TOTAL_HOURS}</span>
         </div>
       </div>
 
@@ -90,62 +92,68 @@ export default function AllocationPanel({
           const count = unit > 1 ? Math.floor(hours / unit) : null
           const sliderMax = hours + remaining
           const lockedMin = m.key === 'meeting' ? min : 0
+          const active = hours > 0
           return (
-            <li key={m.key} className="alloc__row">
-              <div className="alloc__row-head">
-                <span className="alloc__chip" style={{ background: m.accent }} />
+            <li key={m.key} className={`alloc__row ${active ? 'is-active' : ''}`}>
+              <span className="alloc__icon" style={{ color: m.accent }}>
+                <Icon name={m.icon} size={20} />
+              </span>
+              <div className="alloc__meta">
                 <span className="alloc__name">{m.label}</span>
                 <span className="alloc__note">{m.note}</span>
               </div>
-              <div className="alloc__controls">
-                <input
-                  type="range"
-                  min={lockedMin}
-                  max={Math.max(sliderMax, lockedMin)}
-                  step={STEP}
-                  value={hours}
-                  onChange={(e) => set(m.key, Number(e.target.value))}
-                  style={{ accentColor: m.accent }}
-                  aria-label={`${m.label}の時間`}
-                />
-                <div className="alloc__value">
-                  <strong>{hours}</strong>h
-                  {count !== null && <span className="alloc__count">≈ {count}回</span>}
-                </div>
-                <button
-                  type="button"
-                  className="alloc__fill-btn"
-                  disabled={remaining === 0}
-                  onClick={() => set(m.key, hours + remaining)}
-                >
-                  + 残り
-                </button>
+              <div className="alloc__value">
+                <strong>{hours}</strong>h
+                {count !== null && <span className="alloc__count">{count}回</span>}
               </div>
+              <input
+                type="range"
+                className="alloc__slider"
+                min={lockedMin}
+                max={Math.max(sliderMax, lockedMin)}
+                step={STEP}
+                value={hours}
+                onChange={(e) => set(m.key, Number(e.target.value))}
+                style={{ accentColor: m.accent }}
+                aria-label={`${m.label}の時間`}
+              />
+              <button
+                type="button"
+                className="alloc__fill-btn"
+                disabled={remaining === 0}
+                onClick={() => set(m.key, hours + remaining)}
+                title="残り時間をすべてここに"
+                aria-label={`残り時間を${m.label}に追加`}
+              >
+                <Icon name="add" size={18} />
+              </button>
             </li>
           )
         })}
       </ul>
 
       <div className="alloc__actions">
-        <button type="button" className="btn btn--ghost" onClick={reset}>
-          リセット
+        <button type="button" className="btn btn--ghost btn--icon" onClick={reset} title="配分をリセット">
+          <Icon name="restart_alt" size={18} />リセット
         </button>
         {petitionAvailable && (
-          <button type="button" className="btn btn--petition" onClick={onPetition}>
-            上申する（会議制約を外す）
+          <button type="button" className="btn btn--petition btn--icon" onClick={onPetition}>
+            <Icon name="gavel" size={18} />上申
           </button>
         )}
         {state.constraintsReleased && (
-          <span className="alloc__released">✓ 会議制約は解除済み</span>
+          <span className="alloc__released">
+            <Icon name="lock_open" size={16} />制約解除済
+          </span>
         )}
         <button
           type="button"
-          className="btn btn--primary"
+          className="btn btn--primary btn--icon"
           disabled={!balanced}
           onClick={() => onRun(draft)}
           title={balanced ? '' : '残り時間を 0 にしてください'}
         >
-          この配分で1年を実行 ▶
+          1年を実行<Icon name="play_arrow" size={20} />
         </button>
       </div>
     </section>

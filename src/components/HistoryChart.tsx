@@ -1,19 +1,14 @@
 import { trustNorm } from '../game/engine'
 import type { YearRecord } from '../game/types'
+import { Icon } from './ui'
 
 const W = 520
-const H = 180
-const PAD = { top: 16, right: 16, bottom: 28, left: 32 }
+const H = 150
+const PAD = { top: 12, right: 14, bottom: 22, left: 30 }
 
 export default function HistoryChart({ history }: { history: YearRecord[] }) {
-  if (history.length === 0) {
-    return (
-      <section className="chart card">
-        <h2>これまでの推移</h2>
-        <p className="chart__empty">まだデータがありません。1年目を実行すると、ここに推移が表示されます。</p>
-      </section>
-    )
-  }
+  // 履歴が無い初年度は、密度を優先してチャート枠ごと省略する。
+  if (history.length === 0) return null
 
   const innerW = W - PAD.left - PAD.right
   const innerH = H - PAD.top - PAD.bottom
@@ -33,9 +28,11 @@ export default function HistoryChart({ history }: { history: YearRecord[] }) {
   return (
     <section className="chart card">
       <div className="chart__head">
-        <h2>これまでの推移</h2>
+        <h2>
+          <Icon name="show_chart" size={18} />推移
+        </h2>
         <div className="chart__legend">
-          <span className="chart__legend-item"><i className="swatch swatch--bar" />年間成果</span>
+          <span className="chart__legend-item"><i className="swatch swatch--bar" />成果</span>
           <span className="chart__legend-item"><i className="swatch swatch--line" />信頼</span>
         </div>
       </div>
