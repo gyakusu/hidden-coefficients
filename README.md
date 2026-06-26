@@ -5,6 +5,8 @@
 
 [`game_design.md`](./game_design.md) の設計書に基づいた React アプリケーションで、GitHub Actions により GitHub Pages へ公開できます。
 
+> 📜 設計の出発点（最初期コンセプトの原本＋実装との対応注釈）は [`docs/concept-original.md`](./docs/concept-original.md) にあります。
+
 🎮 **公開先（Pages 有効化後）**: https://gyakusu.github.io/hidden-coefficients/
 
 ---
