@@ -1,0 +1,107 @@
+// ============================================================================
+//  観測メモ（フィールドノート）。
+//  行動選択中（時間配分の画面）に、状況把握を助ける情報をページ末尾に出す。
+//  ※ 隠れた係数・正解そのものは明かさない。既出のヒントの再掲と、
+//    客観的なルール／ノイズの読み方など「考える材料」に留める。
+// ============================================================================
+
+import * as C from '../game/config'
+import { canPetition, noiseWidth, trustNorm, trustTier } from '../game/engine'
+import { generateFeedback } from '../game/hints'
+import type { GameState } from '../game/types'
+import { Icon } from './ui'
+
+interface Guide {
+  icon: string
+  text: string
+}
+
+/** 現在の状態から、ネタバレにならない「読みの指針」を組み立てる。 */
+function readingGuides(state: GameState): Guide[] {
+  const tn = trustNorm(state.trust)
+  const tier = trustTier(tn)
+  const noisePct = Math.round(noiseWidth(tn) * 100)
+  const guides: Guide[] = []
+
+  // 初年度はチャートも前回ヒントも無いので、まず方針を一言。
+  if (state.history.length === 0) {
+    guides.push({
+      icon: 'flag',
+      text: 'まだ観測データが1点もない。初年度はどこに賭けても“正解”は見えない——まず1年動かして反応を見よう。',
+    })
+  }
+
+  // ノイズの大きさ＝今の数字をどこまで信じてよいか（信頼ptで縮む）。
+  guides.push({
+    icon: 'blur_on',
+    text:
+      tier === 'low'
+        ? `いまは数字のブレが大きい（±${noisePct}%）。1年の結果だけで「効く／効かない」を決めつけない方がいい。`
+        : tier === 'mid'
+          ? `ブレが少し収まってきた（±${noisePct}%）。傾向が読み取りやすくなりつつある。`
+          : `ブレが小さい（±${noisePct}%）。いまの数字はかなり信用できる。`,
+  })
+
+  // 観測の基本：繰り返して平均を取るとノイズが薄まる（が、年は有限）。
+  guides.push({
+    icon: 'repeat',
+    text: '同じ配分を続けて平均を取れば、ノイズに隠れた“本当の効き”が見えてくる。ただし使える年は有限だ。',
+  })
+
+  // 会議制約のリマインド（解除済みかどうかで出し分け）。
+  if (state.constraintsReleased) {
+    guides.push({ icon: 'lock_open', text: '上申により、会議の最低回数の縛りは外れている。' })
+  } else {
+    guides.push({
+      icon: 'gavel',
+      text: `会議は最低${C.MEETING_MIN_COUNT}回（${C.MEETING_MIN_HOURS}h）が必須。${
+        canPetition(state) ? 'いまなら『上申』でこの縛りを外せそうだ。' : ''
+      }`,
+    })
+  }
+
+  // 昇進後のみ：育成は遅延報酬であることを忘れないように。
+  if (state.promoted) {
+    guides.push({
+      icon: 'school',
+      text: '育成は今年の成果には表れない。効いてくるのは翌年以降だ。',
+    })
+  }
+
+  return guides
+}
+
+export default function ObservationNotes({ state }: { state: GameState }) {
+  // 直近年のヒント（レビュー画面で一度見せた定性シグナル）を再掲する。
+  const last = state.history.at(-1)
+  const lastFb = last ? generateFeedback(last) : null
+  const guides = readingGuides(state)
+
+  return (
+    <section className="notes card">
+      <h2>
+        <Icon name="sticky_note_2" size={18} />観測メモ
+      </h2>
+
+      {last && lastFb && (
+        <div className={`notes__recall tone-${lastFb.tone}`}>
+          <div className="notes__recall-head">
+            <span className="notes__recall-label">前回（{last.year}年目）の手応え</span>
+            <span className="notes__recall-outcome">成果 {last.finalOutcome.toFixed(1)}</span>
+          </div>
+          <p className="notes__recall-signal">{lastFb.signal}</p>
+          <p className="notes__recall-dialogue">{lastFb.dialogue}</p>
+        </div>
+      )}
+
+      <ul className="notes__guides">
+        {guides.map((g, i) => (
+          <li key={i}>
+            <Icon name={g.icon} size={16} className="notes__guide-icon" />
+            <span>{g.text}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  )
+}

@@ -4,6 +4,7 @@ import type { GameState } from '../game/types'
 import type { GameAction } from '../hooks/useGame'
 import AllocationPanel from './AllocationPanel'
 import HistoryChart from './HistoryChart'
+import ObservationNotes from './ObservationNotes'
 import PromotionModal from './PromotionModal'
 import ResultPanel from './ResultPanel'
 import StatusBar from './StatusBar'
@@ -43,6 +44,9 @@ export default function GameScreen({
         )}
 
         <HistoryChart history={state.history} />
+
+        {/* 行動選択中のみ、状況把握を助ける観測メモを末尾に添える。 */}
+        {!reviewing && <ObservationNotes state={state} />}
       </div>
 
       {state.phase === 'promotion' && (
