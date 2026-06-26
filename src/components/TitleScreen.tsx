@@ -1,4 +1,4 @@
-import { Icon } from './ui'
+import { Icon, InfoPopover } from './ui'
 
 const RULES = [
   { icon: 'event', k: '期間', body: <>社会人1〜10年目（10ターン）。毎年 <b>2000時間</b> を配分する。</> },
@@ -35,6 +35,19 @@ export default function TitleScreen({ onStart }: { onStart: () => void }) {
             それとも、<em>前提条件</em>がまだ満たされていないだけだろうか。
           </span>
         </p>
+
+        <div className="title__help">
+          <InfoPopover label="はじめての方へ・遊び方" title="はじめての方へ" symbol="help" anchor="parent">
+            <ol>
+              <li>毎年 <strong>2000時間</strong> を活動に配分して［実行］。</li>
+              <li>出た<strong>成果</strong>と上司の<strong>コメント</strong>を観測する。</li>
+              <li>結果には<strong>ノイズ</strong>が乗る。1年では分からない——同じ配分を続け、平均で見極める。</li>
+              <li>何が効く<strong>変数</strong>で何が効かない<strong>定数</strong>か、10年かけて推定しよう。</li>
+            </ol>
+            <p>ゲーム中は各所の「i」「？」でいつでもヒントを確認できる。</p>
+          </InfoPopover>
+          <span className="title__help-label">はじめての方へ（遊び方）</span>
+        </div>
 
         <button type="button" className="btn btn--primary btn--big btn--icon" onClick={onStart}>
           1年目を始める<Icon name="play_arrow" size={22} />

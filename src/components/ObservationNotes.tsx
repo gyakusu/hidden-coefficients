@@ -9,7 +9,7 @@ import * as C from '../game/config'
 import { canPetition, noiseWidth, trustNorm, trustTier } from '../game/engine'
 import { generateFeedback } from '../game/hints'
 import type { GameState } from '../game/types'
-import { Icon } from './ui'
+import { Icon, InfoPopover } from './ui'
 
 interface Guide {
   icon: string
@@ -79,9 +79,15 @@ export default function ObservationNotes({ state }: { state: GameState }) {
 
   return (
     <section className="notes card">
-      <h2>
-        <Icon name="sticky_note_2" size={18} />観測メモ
-      </h2>
+      <div className="notes__head">
+        <h2>
+          <Icon name="sticky_note_2" size={18} />観測メモ
+        </h2>
+        <InfoPopover label="観測メモとは" title="観測メモとは" anchor="parent">
+          ネタバレなしの「考える材料」。前回の手応えの再掲と、いまの数字をどこまで信じてよいか
+          （ノイズの目安）をまとめている。迷ったらここを見直そう。
+        </InfoPopover>
+      </div>
 
       {last && lastFb && (
         <div className={`notes__recall tone-${lastFb.tone}`}>

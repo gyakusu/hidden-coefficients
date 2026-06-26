@@ -230,6 +230,7 @@ body {
 
 /* ---- status bar ---- */
 .status {
+  position: relative;
   display: grid;
   grid-template-columns: auto 1fr;
   grid-template-areas: "year score" "meters meters";
@@ -246,6 +247,11 @@ body {
   display: flex;
   align-items: baseline;
   gap: 4px;
+}
+.status__year .info,
+.status__score .info,
+.meter__label .info {
+  align-self: center;
 }
 .status__year-icon {
   color: var(--muted);
@@ -333,15 +339,17 @@ body {
 
 /* ---- allocation ---- */
 .alloc__head {
+  position: relative;
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  gap: 8px;
   margin-bottom: 8px;
 }
 .alloc__head h2 {
   margin: 0;
 }
 .alloc__remaining {
+  margin-left: auto;
   font-size: 12px;
   font-family: var(--mono);
   padding: 3px 9px;
@@ -386,6 +394,7 @@ body {
   gap: 5px;
 }
 .alloc__row {
+  position: relative;
   display: grid;
   grid-template-columns: 26px minmax(0, 1fr) auto 32px;
   grid-template-areas:
@@ -419,7 +428,11 @@ body {
   display: flex;
   align-items: baseline;
   gap: 7px;
-  overflow: hidden;
+  /* note は自前で省略表示するため visible にし、ヒントのポップを切らない。 */
+  overflow: visible;
+}
+.alloc__meta .info {
+  align-self: center;
 }
 .alloc__name {
   font-weight: 700;
@@ -479,6 +492,7 @@ body {
   cursor: not-allowed;
 }
 .alloc__actions {
+  position: relative;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -498,6 +512,7 @@ body {
 
 /* ---- result ---- */
 .result__headline {
+  position: relative;
   display: flex;
   flex-wrap: wrap;
   justify-content: space-between;
@@ -505,6 +520,9 @@ body {
   gap: 12px;
   padding-bottom: 12px;
   border-bottom: 1px solid var(--border);
+}
+.result__signal-msg {
+  min-width: 0;
 }
 .result__outcome {
   display: flex;
@@ -558,6 +576,7 @@ body {
   color: var(--teal);
 }
 .result__signal {
+  position: relative;
   margin-top: 12px;
   padding: 10px 12px;
   border-radius: 10px;
@@ -613,6 +632,7 @@ body {
 
 /* ---- chart ---- */
 .chart__head {
+  position: relative;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -985,6 +1005,135 @@ body {
   align-items: center;
   justify-content: center;
   padding: 4px 0 12px;
+}
+
+/* ---- info / help popover ---- */
+.info {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+}
+.info--static {
+  position: static;
+}
+.info__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--card-2);
+  color: var(--muted);
+  cursor: pointer;
+  flex: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+.info__btn:hover {
+  color: var(--teal);
+  border-color: rgba(77, 182, 168, 0.6);
+}
+.info__btn.is-open {
+  color: var(--teal);
+  border-color: var(--teal);
+  background: rgba(77, 182, 168, 0.14);
+}
+.info__pop {
+  position: absolute;
+  top: calc(100% + 6px);
+  z-index: 60;
+  width: max-content;
+  max-width: min(280px, calc(100vw - 24px));
+  padding: 10px 12px;
+  background: var(--card-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 16px 38px -16px rgba(0, 0, 0, 0.85);
+  text-align: left;
+  white-space: normal;
+  font-weight: 400;
+  cursor: default;
+  animation: info-fade 0.13s ease;
+}
+@keyframes info-fade {
+  from {
+    opacity: 0;
+  }
+}
+.info__pop--start {
+  left: 0;
+}
+.info__pop--end {
+  right: 0;
+}
+.info__pop--center {
+  left: 50%;
+  transform: translateX(-50%);
+}
+.info__pop--stretch {
+  left: 0;
+  right: 0;
+  width: auto;
+  max-width: none;
+}
+.info__pop-title {
+  display: block;
+  margin-bottom: 5px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--teal);
+}
+.info__pop-body {
+  display: block;
+  font-size: 12.5px;
+  line-height: 1.55;
+  letter-spacing: normal;
+  color: var(--text);
+}
+.info__pop-body p {
+  margin: 0 0 6px;
+}
+.info__pop-body p:last-child {
+  margin-bottom: 0;
+}
+.info__pop-body ol,
+.info__pop-body ul {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 5px;
+}
+.info__pop-body strong {
+  color: var(--amber);
+}
+
+/* notes / title へ追加した「i・？」の周辺レイアウト */
+.notes__head {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.notes__head h2 {
+  margin: 0;
+}
+.title__help {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: center;
+  margin: 0 0 14px;
+}
+.title__help-label {
+  color: var(--muted);
+  font-size: 12px;
 }
 
 /* ---- responsive ---- */
