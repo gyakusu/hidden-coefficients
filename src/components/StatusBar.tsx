@@ -1,7 +1,7 @@
 import * as C from '../game/config'
 import { noiseWidth, trustNorm, trustTier } from '../game/engine'
 import type { GameState } from '../game/types'
-import { Icon, Meter } from './ui'
+import { Icon, InfoPopover, Meter } from './ui'
 
 const TIER_LABEL = { low: '低', mid: '中', high: '高' } as const
 
@@ -17,12 +17,20 @@ export default function StatusBar({ state, year }: { state: GameState; year?: nu
         <Icon name="calendar_month" className="status__year-icon" size={18} />
         <span className="status__year-num">{shownYear}</span>
         <span className="status__year-unit">/ 10年</span>
+        <InfoPopover label="ゲームの進行について" title="進行" symbol="help" anchor="parent">
+          社会人1〜10年目の全10年。1〜9年目に時間配分を試し、最後の10年目で答え合わせ（種明かし）。
+          試せる回数は限られている——1年1年が貴重な「実験」だ。
+        </InfoPopover>
       </div>
 
       <div className="status__score">
         <Icon name="monitoring" className="status__score-icon" size={18} />
         <span className="status__score-num">{state.cumulativeOutcome.toFixed(1)}</span>
         <span className="status__score-label">累積成果</span>
+        <InfoPopover label="累積成果とは" title="累積成果" anchor="parent">
+          毎年の成果を足し上げた最終スコア。<strong>勝敗はこれだけ</strong>で決まる。
+          単年の上下に一喜一憂せず、10年の合計を最大化しよう。
+        </InfoPopover>
       </div>
 
       <div className="status__meters">
@@ -32,6 +40,12 @@ export default function StatusBar({ state, year }: { state: GameState; year?: nu
           detail={`${TIER_LABEL[tier]}・ノイズ±${noisePct}%`}
           value={tn}
           color="#4db6a8"
+          info={
+            <>
+              <p>報告や現場訪問でじわじわ貯まり、毎年少しずつ減る<strong>遅れて効く資産</strong>。</p>
+              <p>高いほど成果のブレ（ノイズ）が縮み、数字が読み取りやすくなる。いまは±{noisePct}%。</p>
+            </>
+          }
         />
         {state.promoted && (
           <Meter
@@ -41,6 +55,7 @@ export default function StatusBar({ state, year }: { state: GameState; year?: nu
             value={state.awareness - C.AWARENESS_BASE}
             max={C.AWARENESS_MAX - C.AWARENESS_BASE}
             color="#d2728f"
+            info="昇進で解放された倍率。「育成」に時間を割くほど上がり、翌年以降のすべての成果を底上げする。"
           />
         )}
       </div>

@@ -1,6 +1,6 @@
 import { trustNorm } from '../game/engine'
 import type { YearRecord } from '../game/types'
-import { Icon } from './ui'
+import { Icon, InfoPopover } from './ui'
 
 const W = 520
 const H = 150
@@ -30,6 +30,10 @@ export default function HistoryChart({ history }: { history: YearRecord[] }) {
       <div className="chart__head">
         <h2>
           <Icon name="show_chart" size={18} />推移
+          <InfoPopover label="グラフの見かた" title="グラフの見かた" anchor="parent">
+            <strong>棒</strong>＝その年の成果、<strong>線</strong>＝信頼の推移。
+            1点ごとの上下より、配分を変えたときに全体の傾向がどう動くかを読もう。
+          </InfoPopover>
         </h2>
         <div className="chart__legend">
           <span className="chart__legend-item"><i className="swatch swatch--bar" />成果</span>

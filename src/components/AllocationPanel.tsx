@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import * as C from '../game/config'
 import { meetingMinHours, totalAllocated } from '../game/engine'
 import type { Allocation, ActivityKey, GameState } from '../game/types'
-import { ACTIVITIES, Icon } from './ui'
+import { ACTIVITIES, ACTIVITY_TIP, Icon, InfoPopover } from './ui'
 
 const STEP = 50
 
@@ -65,6 +65,13 @@ export default function AllocationPanel({
         <h2>
           <Icon name="schedule" size={18} />今年の時間配分
         </h2>
+        <InfoPopover label="遊び方を見る" title="この画面の遊び方" symbol="help" anchor="parent">
+          <p>毎年 <strong>2000時間</strong> を各活動に配分する。スライダーか「＋」で割り振り、
+            <strong>残りを0</strong> にして［1年を実行］。</p>
+          <p>会議には最低ノルマ（200回＝400h）がある。各活動の効き目（係数）は伏せられている——
+            出た成果を観測して、何が効くのかを推定していこう。</p>
+          <p>各活動の「i」で、その活動のヒントが見られる。</p>
+        </InfoPopover>
         <div className={`alloc__remaining ${balanced ? 'is-ok' : 'is-warn'}`}>
           残り <strong>{remaining}</strong>h
           <span className="alloc__total">{total}/{C.TOTAL_HOURS}</span>
@@ -101,6 +108,9 @@ export default function AllocationPanel({
               <div className="alloc__meta">
                 <span className="alloc__name">{m.label}</span>
                 <span className="alloc__note">{m.note}</span>
+                <InfoPopover label={`${m.label}のヒント`} title={m.label} anchor="parent">
+                  {ACTIVITY_TIP[m.key]}
+                </InfoPopover>
               </div>
               <div className="alloc__value">
                 <strong>{hours}</strong>h
@@ -137,9 +147,15 @@ export default function AllocationPanel({
           <Icon name="restart_alt" size={18} />リセット
         </button>
         {petitionAvailable && (
-          <button type="button" className="btn btn--petition btn--icon" onClick={onPetition}>
-            <Icon name="gavel" size={18} />上申
-          </button>
+          <>
+            <button type="button" className="btn btn--petition btn--icon" onClick={onPetition}>
+              <Icon name="gavel" size={18} />上申
+            </button>
+            <InfoPopover label="上申とは" title="上申" anchor="parent">
+              条件を満たすと選べる特別な行動。会議の最低ノルマ（200回）の縛りを外し、
+              その時間を別の活動に回せるようになる。一度行うと以後ずっと有効。
+            </InfoPopover>
+          </>
         )}
         {state.constraintsReleased && (
           <span className="alloc__released">

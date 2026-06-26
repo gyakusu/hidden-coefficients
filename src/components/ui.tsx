@@ -1,4 +1,5 @@
-import type { CSSProperties } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 import type { ActivityKey } from '../game/types'
 
 /** アクティビティの表示メタ情報（係数は明かさない＝制約と所要時間のみ）。 */
@@ -38,6 +39,21 @@ export const ACTIVITY_META: Record<ActivityKey, ActivityMeta> = ACTIVITIES.reduc
   {} as Record<ActivityKey, ActivityMeta>,
 )
 
+/**
+ * 各アクティビティの「読みの指針」。
+ * ※ 隠れた係数・正解は明かさない。客観的な所要時間／制約と、
+ *   「観測して推定する」という遊び方の助言に留める。
+ */
+export const ACTIVITY_TIP: Record<ActivityKey, string> = {
+  meeting:
+    '1回2時間。最低200回（400h）こなす義務があり、満たさないと1年を実行できない。まずノルマを確保しよう。',
+  docs: '1時間単位で自由に投下できる。効き目は伏せられている——続けて試し、成果の変化から推し量ろう。',
+  visit: '1回8時間と重め。信頼ptを稼げる活動。成果にどう響くかは観測しながら見極めよう。',
+  va: 'すぐ効くとは限らない一手。「効かない」のか、まだ前提条件が足りないだけなのか——早合点せず観測を続けよう。',
+  report: '1時間単位で投下でき、信頼ptを効率よく稼げる。信頼は遅れて効いてくる。焦らず積もう。',
+  develop: '今年の成果には表れない。翌年以降のすべての成果を底上げする、未来への投資。',
+}
+
 /** Google Material Symbols のアイコン。 */
 export function Icon({
   name,
@@ -67,6 +83,73 @@ export function Icon({
   )
 }
 
+/**
+ * タップで開閉する情報／ヒントのポップオーバー。「i」または「？」ボタン。
+ * 初プレイの人がルールや読み方を確認できるよう、判断ポイントに散りばめて使う。
+ *
+ * anchor:
+ *   - 'self'   …ボタンの直下に表示（align で左右寄せ）。
+ *   - 'parent' …直近の position 指定済み祖先の幅いっぱいに表示（画面端でもはみ出さない）。
+ */
+export function InfoPopover({
+  label,
+  title,
+  children,
+  symbol = 'info',
+  align = 'start',
+  anchor = 'self',
+}: {
+  label: string
+  title?: string
+  children: ReactNode
+  symbol?: 'info' | 'help'
+  align?: 'start' | 'end' | 'center'
+  anchor?: 'self' | 'parent'
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLSpanElement>(null)
+  const popId = useId()
+
+  useEffect(() => {
+    if (!open) return
+    const onPointer = (e: PointerEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('pointerdown', onPointer)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('pointerdown', onPointer)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open])
+
+  const popClass = anchor === 'parent' ? 'info__pop info__pop--stretch' : `info__pop info__pop--${align}`
+
+  return (
+    <span className={`info ${anchor === 'parent' ? 'info--static' : ''}`} ref={ref}>
+      <button
+        type="button"
+        className={`info__btn ${open ? 'is-open' : ''}`}
+        aria-label={label}
+        aria-expanded={open}
+        aria-controls={popId}
+        onClick={() => setOpen((o) => !o)}
+      >
+        <Icon name={symbol === 'help' ? 'help' : 'info'} size={14} fill={false} />
+      </button>
+      {open && (
+        <span className={popClass} id={popId} role="note">
+          {title && <span className="info__pop-title">{title}</span>}
+          <span className="info__pop-body">{children}</span>
+        </span>
+      )}
+    </span>
+  )
+}
+
 export function Meter({
   value,
   max = 1,
@@ -74,6 +157,8 @@ export function Meter({
   detail,
   color,
   icon,
+  info,
+  infoTitle,
 }: {
   value: number
   max?: number
@@ -81,6 +166,9 @@ export function Meter({
   detail?: string
   color: string
   icon?: string
+  /** ある場合、ラベル横に「i」ボタンを出して説明を表示する。 */
+  info?: ReactNode
+  infoTitle?: string
 }) {
   const pct = Math.max(0, Math.min(100, (value / max) * 100))
   return (
@@ -89,6 +177,11 @@ export function Meter({
         <span className="meter__label">
           {icon && <Icon name={icon} className="meter__icon" size={16} />}
           {label}
+          {info && (
+            <InfoPopover label={`${label}について`} title={infoTitle ?? label} anchor="parent">
+              {info}
+            </InfoPopover>
+          )}
         </span>
         {detail && <span className="meter__detail">{detail}</span>}
       </div>
