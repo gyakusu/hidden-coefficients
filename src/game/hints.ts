@@ -6,7 +6,8 @@
 // ============================================================================
 
 import type { ActivityKey, YearResult } from './types'
-import { trustTier } from './engine'
+import { marketNews, trustTier } from './engine'
+import type { MarketNews } from './engine'
 
 export type FeedbackTone = 'positive' | 'neutral' | 'warning' | 'misleading'
 
@@ -25,6 +26,7 @@ const ACTIVITY_LABEL: Record<ActivityKey, string> = {
   va: 'VA提案',
   report: '報告',
   develop: '育成',
+  research: '競合調査',
 }
 
 const DIALOGUE: Record<'low' | 'mid' | 'high', string[]> = {
@@ -50,9 +52,38 @@ function pick<T>(arr: T[], seed: number): T {
   return arr[((seed % arr.length) + arr.length) % arr.length]
 }
 
+// ---- 市況ニュース（設計書 §3.3）：方向だけ開示し、大きさは伏せる ----
+const MARKET_HEADLINES: Record<MarketNews, string[]> = {
+  up: [
+    '円安が進行。輸出環境は追い風だ。',
+    '受注が上向き、業界全体が活気づいている。',
+    '市況は好転。今年は成果が出やすい環境かもしれない。',
+  ],
+  down: [
+    '景気後退の足音。市場は冷え込み気味だ。',
+    '取引先が投資を絞り、逆風が強まっている。',
+    '市況は軟調。努力が数字に表れにくい年になりそうだ。',
+  ],
+  flat: [
+    '市況に大きな動きはない。環境はおおむね平年並みだ。',
+    '相場は小動き。良くも悪くも平年並みの一年になりそうだ。',
+  ],
+}
+
+export interface MarketInfo {
+  news: MarketNews
+  headline: string
+}
+
+/** 市況係数から、年初に流す「ニュース」（向き＋見出し）を組み立てる。 */
+export function marketInfo(market: number, year: number): MarketInfo {
+  const news = marketNews(market)
+  return { news, headline: pick(MARKET_HEADLINES[news], year) }
+}
+
 /** 直接成果に寄与しうるアクティビティのうち、最大寄与のものを返す。 */
 function topContributor(result: YearResult): { key: ActivityKey; value: number } {
-  const keys: ActivityKey[] = ['meeting', 'docs', 'visit', 'va']
+  const keys: ActivityKey[] = ['meeting', 'docs', 'visit', 'va', 'research']
   let best: { key: ActivityKey; value: number } = { key: 'meeting', value: -1 }
   for (const k of keys) {
     if (result.contributions[k] > best.value) best = { key: k, value: result.contributions[k] }
@@ -112,6 +143,8 @@ export function generateFeedback(result: YearResult): Feedback {
     visit: `現場訪問が${certainty}効いている手応え。足を運んだ分が数字になっている。`,
     docs: `資料作成が${certainty}効いた感触。会議も少しやりやすくなった気がする（交差項？）。`,
     meeting: `会議をこなした感はあるが、成果への直結は${certainty}薄いと感じる。`,
+    // 競合調査は「初年度は劇的に効く」——この手応えが2年目以降の裏切りへの伏線になる。
+    research: `競合調査が${certainty}効いた手応え。知らなかった市場の事情が、そのまま数字を押し上げた。`,
     report: '',
     develop: '',
   }

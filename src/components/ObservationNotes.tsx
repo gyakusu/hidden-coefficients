@@ -48,6 +48,12 @@ function readingGuides(state: GameState): Guide[] {
     text: '同じ配分を続けて平均を取れば、ノイズに隠れた“本当の効き”が見えてくる。ただし使える年は有限だ。',
   })
 
+  // 市況：向きは分かるが大きさは伏せられ、信頼でも縮まない外生要因。
+  guides.push({
+    icon: 'public',
+    text: '成果には今年の市況（環境）も掛かっている。向きはニュースで分かるが、大きさは読めない——信頼を積んでもこのブレは縮まない。',
+  })
+
   // 会議制約のリマインド（解除済みかどうかで出し分け）。
   if (state.constraintsReleased) {
     guides.push({ icon: 'lock_open', text: '上申により、会議の最低回数の縛りは外れている。' })

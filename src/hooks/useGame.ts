@@ -1,15 +1,23 @@
 import { useReducer } from 'react'
 import * as C from '../game/config'
 import { applyYear, canPetition, computeYear, initialState } from '../game/engine'
-import type { Allocation, GameState } from '../game/types'
+import type { Allocation, GameState, Hypothesis, YearRecord } from '../game/types'
 
 export type GameAction =
   | { type: 'START' }
   | { type: 'RUN_YEAR'; allocation: Allocation }
-  | { type: 'CONTINUE' }
+  | { type: 'CONTINUE'; hypothesis?: Hypothesis | null }
   | { type: 'ACK_PROMOTION' }
   | { type: 'PETITION' }
   | { type: 'RESET' }
+
+/** 直近年の履歴レコードに、年度末に宣言した仮説を書き込む。 */
+function withHypothesis(history: YearRecord[], hypothesis: Hypothesis | null): YearRecord[] {
+  if (history.length === 0 || hypothesis == null) return history
+  const next = history.slice()
+  next[next.length - 1] = { ...next[next.length - 1], hypothesis }
+  return next
+}
 
 function gameReducer(state: GameState, action: GameAction): GameState {
   switch (action.type) {
@@ -25,14 +33,17 @@ function gameReducer(state: GameState, action: GameAction): GameState {
 
     case 'CONTINUE': {
       if (state.phase !== 'review') return state
-      if (state.year > C.PLAY_YEARS) {
-        return { ...state, phase: 'ended' } // 10年目 = 説明フェーズ
+      // 年度末レビューで宣言した仮説を、確定した直近年の記録に書き込む。
+      const history = withHypothesis(state.history, action.hypothesis ?? null)
+      const s = { ...state, history }
+      if (s.year > C.PLAY_YEARS) {
+        return { ...s, phase: 'ended' } // 10年目 = 説明フェーズ
       }
-      if (state.year === C.PROMOTION_YEAR && !state.promoted) {
+      if (s.year === C.PROMOTION_YEAR && !s.promoted) {
         // 昇進：定数だった「部署の力」が変数（育成）になる。
-        return { ...state, promoted: true, phase: 'promotion' }
+        return { ...s, promoted: true, phase: 'promotion' }
       }
-      return { ...state, phase: 'playing' }
+      return { ...s, phase: 'playing' }
     }
 
     case 'ACK_PROMOTION':

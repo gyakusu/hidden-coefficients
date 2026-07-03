@@ -4,6 +4,7 @@ import type { GameState } from '../game/types'
 import type { GameAction } from '../hooks/useGame'
 import AllocationPanel from './AllocationPanel'
 import HistoryChart from './HistoryChart'
+import NewsBanner from './NewsBanner'
 import ObservationNotes from './ObservationNotes'
 import PromotionModal from './PromotionModal'
 import ResultPanel from './ResultPanel'
@@ -19,18 +20,20 @@ export default function GameScreen({
   const reviewing = state.phase === 'review'
   // レビュー中は state.year が翌年に進んでいるため、表示は実行した年に戻す。
   const displayYear = reviewing ? state.year - 1 : state.year
-  const prevOutcome = state.history.at(-2)?.finalOutcome
 
   return (
     <div className="game">
       <StatusBar state={state} year={displayYear} />
 
       <div className="game__main">
+        {/* 行動選択中のみ、年初の市況ニュース（方向のみ開示）を出す。 */}
+        {!reviewing && <NewsBanner market={state.market} year={state.year} />}
+
         {reviewing && state.lastResult ? (
           <ResultPanel
+            state={state}
             result={state.lastResult}
-            prevOutcome={prevOutcome}
-            onContinue={() => dispatch({ type: 'CONTINUE' })}
+            onContinue={(hypothesis) => dispatch({ type: 'CONTINUE', hypothesis })}
           />
         ) : (
           <AllocationPanel
