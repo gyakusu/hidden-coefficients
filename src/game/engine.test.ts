@@ -4,10 +4,17 @@ import {
   applyYear,
   canPetition,
   computeYear,
+  counterfactualScore,
+  decompose,
+  docsValue,
   emptyAllocation,
   initialState,
+  knowledgeStock,
+  marketNews,
   meetingMinHours,
   noiseWidth,
+  rollMarket,
+  skillScore,
   trustNorm,
   vaGate,
 } from './engine'
@@ -111,7 +118,7 @@ function fill(partial: Partial<Allocation>): Allocation {
   return { ...emptyAllocation(), ...partial }
 }
 
-/** 9年プレイして最終累積成果を返す（ノイズなし）。petition 可能なら自動で解除。 */
+/** 9年プレイして最終累積成果を返す（ノイズ・市況なし）。petition 可能なら自動で解除。 */
 function simulate(strategy: Strategy): GameState {
   let s = initialState()
   s.phase = 'playing'
@@ -120,7 +127,8 @@ function simulate(strategy: Strategy): GameState {
     if (canPetition(s)) s = { ...s, constraintsReleased: true }
     const a = strategy(s)
     const r = computeYear(s, a, noNoise)
-    s = applyYear(s, r)
+    // noNoise(=0.5) を applyYear にも渡すと市況は 1.0 に固定され、戦略比較が決定的になる。
+    s = applyYear(s, r, noNoise)
   }
   return s
 }
@@ -176,5 +184,130 @@ describe('戦略バランスのキャリブレーション', () => {
     expect(sNaive.cumulativeOutcome).toBeLessThan(30)
     // 上級は最高ランク帯に届く。
     expect(sExpert.cumulativeOutcome).toBeGreaterThan(C.GRADES[1].min)
+  })
+})
+
+// ---------------------------------------------------------------------------
+//  P1: 非定常係数（設計書 §1・§2）
+// ---------------------------------------------------------------------------
+
+describe('資料作成の凹関数化（設計書 §2）', () => {
+  it('投入に対して逓減する（限界効用が下がる）飽和曲線', () => {
+    expect(docsValue(0)).toBeCloseTo(0)
+    const d100 = docsValue(100)
+    const d300 = docsValue(300)
+    const d1000 = docsValue(1000)
+    // 単調増加だが頭打ち。
+    expect(d300).toBeGreaterThan(d100)
+    expect(d1000).toBeLessThanOrEqual(C.DOCS_VALUE_MAX + 1e-9)
+    // 1時間あたりは逓減：最初の100hの傾き > 300h付近の傾き。
+    const slopeEarly = d100 / 100
+    const slopeLate = (d1000 - d300) / 700
+    expect(slopeEarly).toBeGreaterThan(slopeLate)
+  })
+})
+
+describe('競合調査の累積サチュレーション（設計書 §1）', () => {
+  const base = { year: 1, trust: 0, awareness: 1, promoted: false }
+
+  it('知識ストック K は累積時間で飽和する', () => {
+    expect(knowledgeStock(0)).toBeCloseTo(0)
+    expect(knowledgeStock(1e9)).toBeCloseTo(1)
+    expect(knowledgeStock(C.RESEARCH_TAU)).toBeCloseTo(1 - Math.exp(-1))
+  })
+
+  it('初年度は大きく効くが、2年目に同じ時間を入れても寄与はほぼ消える（フロー型）', () => {
+    const a: Allocation = { ...emptyAllocation(), research: 150 }
+    // 1年目（累積0から）
+    const y1 = computeYear({ ...base, researchCumHours: 0 }, a, noNoise)
+    // 2年目（累積150から、さらに150投入）
+    const y2 = computeYear({ ...base, researchCumHours: 150 }, a, noNoise)
+    expect(y1.contributions.research).toBeGreaterThan(3) // 初回は主力級
+    expect(y2.contributions.research).toBeLessThan(y1.contributions.research * 0.5) // 2回目は激減
+  })
+
+  it('applyYear が累積調査時間を積み上げる', () => {
+    let s = initialState()
+    s.phase = 'playing'
+    const a: Allocation = { ...emptyAllocation(), meeting: 400, research: 800 }
+    const r = computeYear(s, a, noNoise)
+    s = applyYear(s, r, noNoise)
+    expect(s.researchCumHours).toBe(800)
+  })
+})
+
+// ---------------------------------------------------------------------------
+//  P2: 市況（設計書 §3）
+// ---------------------------------------------------------------------------
+
+describe('市況係数と評価の二軸化（設計書 §3）', () => {
+  it('市況は範囲内にクランプされ、平均回帰する', () => {
+    // 上振れの連続を与えても上限を超えない。
+    let m = 1
+    for (let i = 0; i < 50; i++) m = rollMarket(m, () => 1) // ε = +MACRO_STEP
+    expect(m).toBeLessThanOrEqual(1 + C.MACRO_RANGE + 1e-9)
+    expect(m).toBeGreaterThan(1)
+    // ノイズ0（rng=0.5）なら平均回帰で 1.0 に収束する。
+    let back = 1.2
+    for (let i = 0; i < 50; i++) back = rollMarket(back, () => 0.5)
+    expect(back).toBeCloseTo(1)
+  })
+
+  it('市況は成果に外生的に掛かる（信頼では縮まない）', () => {
+    const s = { year: 1, trust: 0, awareness: 1, promoted: false, market: 1.2 }
+    const a: Allocation = { ...emptyAllocation(), meeting: 400 }
+    const r = computeYear(s, a, noNoise)
+    expect(r.marketCoef).toBe(1.2)
+    expect(r.finalOutcome).toBeCloseTo(r.baseOutcome * 1.2)
+  })
+
+  it('marketNews は向きだけを返す', () => {
+    expect(marketNews(1.2)).toBe('up')
+    expect(marketNews(0.8)).toBe('down')
+    expect(marketNews(1.0)).toBe('flat')
+  })
+
+  it('実力点は市況で割り戻され、素点と分離される', () => {
+    let s = initialState()
+    s.phase = 'playing'
+    const a: Allocation = { ...emptyAllocation(), meeting: 400, visit: 600 }
+    // 市況を追い風に固定して1年進める。
+    s = { ...s, market: 1.2 }
+    const r = computeYear(s, a, noNoise)
+    s = applyYear(s, r, noNoise)
+    const raw = s.cumulativeOutcome
+    const skill = skillScore(s.history)
+    // 追い風なので素点 > 実力点。
+    expect(raw).toBeGreaterThan(skill)
+    expect(skill).toBeCloseTo(raw / 1.2)
+  })
+
+  it('decompose は実力+市況+運＝最終成果に一致する', () => {
+    const s = { year: 3, trust: C.TRUST_MAX, awareness: 1.2, promoted: true, market: 0.9 }
+    const a: Allocation = { ...emptyAllocation(), meeting: 400, va: 800, visit: 800 }
+    const r = computeYear(s, a, () => 0.7)
+    const d = decompose(r)
+    expect(d.skill + d.market + d.noise).toBeCloseTo(r.finalOutcome)
+  })
+})
+
+// ---------------------------------------------------------------------------
+//  P3: 反実仮想（設計書 §4.2）
+// ---------------------------------------------------------------------------
+
+describe('反実仮想スコア（設計書 §4.2）', () => {
+  it('毎年同じ配分なら、反実仮想スコアは実際の累積成果に一致する', () => {
+    // 制約に触れない一定配分（会議下限のまま・上申しない）で1ゲーム回す。
+    const constant: Allocation = { ...emptyAllocation(), meeting: 400, visit: 600, report: 600, va: 400 }
+    let s = initialState()
+    s.phase = 'playing'
+    for (let i = 0; i < C.PLAY_YEARS; i++) {
+      if (s.year === C.PROMOTION_YEAR) s.promoted = true
+      const r = computeYear(s, constant, () => 0.3) // 一定のノイズ
+      s = applyYear(s, r, () => 0.65) // 市況にうねりを持たせる
+    }
+    const cf = counterfactualScore(s.history)
+    // 最終年の配分＝全年の配分なので、同一系列を再利用すれば一致する。
+    expect(cf).toBeCloseTo(s.cumulativeOutcome, 1)
   })
 })

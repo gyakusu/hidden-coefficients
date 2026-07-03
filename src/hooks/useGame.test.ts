@@ -11,6 +11,7 @@ const alloc: Allocation = {
   va: 400,
   report: 600,
   develop: 0,
+  research: 0,
 }
 
 /** 1ターン分（実行 → レビュー → 続行 / 必要なら昇進を承認）を進める。 */
@@ -61,5 +62,13 @@ describe('ターン進行の状態遷移（reducer）', () => {
     s = gameReducer(s, { type: 'RESET' })
     expect(s.phase).toBe('title')
     expect(s.history).toHaveLength(0)
+  })
+
+  it('CONTINUE に渡した仮説が直近年の記録へ保存される（設計書 §4.1③）', () => {
+    let s = gameReducer(initialState(), { type: 'START' })
+    s = gameReducer(s, { type: 'RUN_YEAR', allocation: alloc })
+    expect(s.history.at(-1)?.hypothesis).toBeNull()
+    s = gameReducer(s, { type: 'CONTINUE', hypothesis: 'va' })
+    expect(s.history[0].hypothesis).toBe('va')
   })
 })

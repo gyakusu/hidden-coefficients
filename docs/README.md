@@ -5,7 +5,7 @@
 | ファイル | 内容 |
 |---|---|
 | [`concept-original.md`](./concept-original.md) | **最初期のコンセプト原本**（当時のまま保存 ＋ 実装との対応注釈）。このゲームの出発点。 |
-| [`idea-real-world-expansion.md`](./idea-real-world-expansion.md) | **次期拡張アイデア**（2026-07 ディレクターフィードバック対応）。非定常係数・市況・年次振り返りの設計案。 |
+| [`idea-real-world-expansion.md`](./idea-real-world-expansion.md) | **拡張の設計＋実装記録**（2026-07 ディレクターフィードバック対応）。非定常係数・市況・年次振り返り。P1〜P3 実装済み。 |
 
 ## ドキュメントの流れ
 

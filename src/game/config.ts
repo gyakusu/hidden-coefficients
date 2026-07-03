@@ -26,6 +26,7 @@ export const UNIT_HOURS: Record<ActivityKey, number> = {
   va: 4,
   report: 1,
   develop: 1,
+  research: 8,
 }
 
 /** 会議の最低回数（= 最低時間）。上申で解除可能。 */
@@ -40,8 +41,6 @@ export const COEF = {
   meetingDocsBoost: 0.003,
   /** その底上げが最大になる資料作成時間。 */
   docsBoostFullHours: 600,
-  /** 資料作成：弱い変数。 */
-  docs: 0.006,
   /** 現場訪問：中程度の変数（優等生）。 */
   visit: 0.012,
   /** VA提案：真の主力変数（ゲート全開時）。 */
@@ -49,6 +48,37 @@ export const COEF = {
   /** 報告：直接成果はゼロ（信頼ptの源泉）。 */
   report: 0,
 }
+
+// ---- 資料作成の凹関数化（設計書 §2）----
+//  線形（0.006×時間）を飽和曲線に置換：value = MAX × (1 − exp(−h / TAU))。
+//  「1hで大半、作り込みは逓減」＝“少し作るのは正解、作り込むのは悪手”を数式で表す。
+/** 資料作成の寄与の上限（頭打ち値）。 */
+export const DOCS_VALUE_MAX = 2.4
+/** 資料作成の飽和速度（この時間で 63% に到達）。 */
+export const DOCS_TAU = 150
+
+// ---- 競合調査：累積サチュレーション（設計書 §1・非定常係数）----
+//  知識ストック K = 1 − exp(−累積調査時間 / TAU)。
+//  その年の寄与は「K の年内差分（フロー）」に比例＝1回目は効くが2回目以降はほぼ無意味。
+/** 知識ストックの飽和速度。 */
+export const RESEARCH_TAU = 120
+/** K の差分 1.0 あたりの成果（フロー型の最大寄与係数）。 */
+export const RESEARCH_COEF_MAX = 6
+/** 情報開示ティア①（ランダム係数の符号が読めるようになる知識ストック閾値）。 */
+export const RESEARCH_INFO_TIER_1 = 0.5
+/** 情報開示ティア②（寄与上位1項目が読めるようになる知識ストック閾値）。 */
+export const RESEARCH_INFO_TIER_2 = 0.8
+
+// ---- 市況係数：会社マターですら決まらない外生要因（設計書 §3）----
+//  平均回帰する AR(1) で好況・不況が数年単位でうねる。信頼を積んでも縮まない。
+/** 景気のうねりの持続性（前年からの慣性）。 */
+export const MACRO_PERSIST = 0.6
+/** 年ごとの変動幅（一様乱数の振れ幅 ±）。 */
+export const MACRO_STEP = 0.1
+/** 市況係数の上下限（1 ± RANGE = 0.75〜1.25）。 */
+export const MACRO_RANGE = 0.25
+/** ニュースで方向（追い風／向かい風）を報じる閾値。 */
+export const MACRO_NEWS_THRESHOLD = 0.1
 
 // ---- VA提案ゲート（信頼正規化値で開く交差項。設計書 §4.3 / §5.3）----
 /** これ未満の信頼ではVA係数は立ち上がらない。 */
@@ -86,7 +116,8 @@ export const PETITION_TRUST_NORM = 0.6
 /** 上申に必要な累積成果。 */
 export const PETITION_CUM_OUTCOME = 55
 
-// ---- 評価（累積成果 → ランク）。calibrate テストで妥当性を担保。----
+// ---- 評価（実力点 → ランク）。市況で運良く伸びた素点ではなく、市況調整後の
+//      実力点でランクを判定する（設計書 §3.4）。calibrate テストで妥当性を担保。----
 export interface Grade {
   min: number
   rank: string
