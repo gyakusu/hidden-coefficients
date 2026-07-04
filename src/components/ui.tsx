@@ -15,12 +15,14 @@ export interface ActivityMeta {
   icon: string
 }
 
+// note は所要時間・制約など客観情報のみ。「信頼を稼ぐ」は配属で担当が変わるため、
+// AllocationPanel 側でシナリオに応じて動的に付す（earnsTrust）。
 export const ACTIVITIES: ActivityMeta[] = [
   { key: 'meeting', label: '会議', note: '2h/回・最低200回必須', accent: '#7c8aa5', icon: 'groups' },
   { key: 'docs', label: '資料作成', note: '任意時間', accent: '#6aa0c4', icon: 'description' },
-  { key: 'visit', label: '現場訪問', note: '8h/回・信頼を稼ぐ', accent: '#4db6a8', icon: 'engineering' },
+  { key: 'visit', label: '現場訪問', note: '8h/回', accent: '#4db6a8', icon: 'engineering' },
   { key: 'va', label: 'VA提案', note: '4h/回', accent: '#e0a458', icon: 'lightbulb' },
-  { key: 'report', label: '報告', note: '任意時間・信頼を稼ぐ', accent: '#a78bc0', icon: 'campaign' },
+  { key: 'report', label: '報告', note: '任意時間', accent: '#a78bc0', icon: 'campaign' },
   {
     key: 'develop',
     label: '育成',
@@ -41,15 +43,20 @@ export const ACTIVITY_META: Record<ActivityKey, ActivityMeta> = ACTIVITIES.reduc
 
 /**
  * 各アクティビティの「読みの指針」。
- * ※ 隠れた係数・正解は明かさない。客観的な所要時間／制約と、
- *   「観測して推定する」という遊び方の助言に留める。
+ * ※ 隠れた係数・正解・応答の“形”は明かさない（配属で活動⇄形が入れ替わるため、
+ *   特定の活動に形を紐づけると誤誘導になる）。客観的な所要時間／制約と、
+ *   「観測して推定する」という遊び方の一般的助言に留める。
  */
+const OBSERVE_TIP =
+  '効き目（係数）は伏せられている。続けて試し、成果の変化から推し量ろう。同じ配分を続けた年と、大きく変えた年を見比べると、効き方の“クセ”が見えてくる。早合点は禁物——「効かない」のか、まだ前提が足りないだけなのか。'
+
 export const ACTIVITY_TIP: Record<ActivityKey, string> = {
   meeting:
-    '1回2時間。最低200回（400h）こなす義務があり、満たさないと1年を実行できない。まずノルマを確保しよう。',
-  docs: '1時間単位で自由に投下できる。効き目は伏せられている——続けて試し、成果の変化から推し量ろう。ただし「かければかけるほど」とは限らない。',
-  visit: '1回8時間と重め。信頼ptを稼げる活動。成果にどう響くかは観測しながら見極めよう——同じ配分を繰り返した年と、大きく変えた年で、手応えを見比べてみるといい。',
-  va: 'すぐ効くとは限らない一手。「効かない」のか、まだ前提条件が足りないだけなのか——早合点せず観測を続けよう。',
+    '1回2時間。最低200回（400h）こなす義務があり、満たさないと1年を実行できない。まずノルマを確保しよう。' +
+    OBSERVE_TIP,
+  docs: '1時間単位で自由に投下できる。' + OBSERVE_TIP,
+  visit: '1回8時間と重め。' + OBSERVE_TIP,
+  va: '1回4時間。' + OBSERVE_TIP,
   report: '1時間単位で投下でき、信頼ptを効率よく稼げる。信頼は遅れて効いてくる。焦らず積もう。',
   develop: '今年の成果には表れない。翌年以降のすべての成果を底上げする、未来への投資。',
 }

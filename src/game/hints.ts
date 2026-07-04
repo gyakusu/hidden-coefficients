@@ -8,6 +8,8 @@
 import type { ActivityKey, YearResult } from './types'
 import { marketNews, trustTier } from './engine'
 import type { MarketNews } from './engine'
+import { baseScenario } from './scenario'
+import type { RoleKey, Scenario } from './scenario'
 
 export type FeedbackTone = 'positive' | 'neutral' | 'warning' | 'misleading'
 
@@ -90,36 +92,57 @@ function topContributor(result: YearResult): { key: ActivityKey; value: number }
   return best
 }
 
-export function generateFeedback(result: YearResult): Feedback {
+/** 役割ごとの「手応えシグナル」テンプレ。効き方の“形”は配属で活動が入れ替わる。 */
+function signalForRole(role: RoleKey, label: string, certainty: string): string {
+  switch (role) {
+    case 'gated':
+      return `${label}が${certainty}成果に結びついた手応えがある。前提（信頼）が整い、係数が立ち上がっている。`
+    case 'cumulative':
+      // 「初めて対峙した領域ほど数字を動かす」——同じ配分を繰り返した年の肩透かしへの伏線
+      //  （飽和そのものは明言しない＝示唆しすぎない）。
+      return `${label}が${certainty}効いている手応え。初めて向き合った領域ほど、見え方が変わって数字に響いた。`
+    case 'concave':
+      return `${label}が${certainty}効いた感触。ただし、ほどほどで頭打ちになる気配もある。`
+    case 'dummy':
+      return `${label}をこなした感はあるが、成果への直結は${certainty}薄いと感じる。`
+    default:
+      return '目立った成果の手応えはなかった。配分を見直す余地がありそうだ。'
+  }
+}
+
+export function generateFeedback(result: YearResult, scenario: Scenario = baseScenario()): Feedback {
   const tier = trustTier(result.trustNormAtStart)
   const dialogue = pick(DIALOGUE[tier], result.year)
 
-  const vaHours = result.allocation.va
+  // 「真の主力（ゲート付き）」を担う活動。配属で会議/資料/現場/VAのどれかに入れ替わる。
+  const gatedKey = scenario.activityOf.gated
+  const gatedLabel = ACTIVITY_LABEL[gatedKey]
+  const gatedHours = result.allocation[gatedKey]
   const gateClosed = result.vaGate < 0.2
   const top = topContributor(result)
 
-  // --- 罠：VAに注力したのにゲートが閉じていて不発 ---
-  if (vaHours >= 300 && gateClosed) {
+  // --- 罠：主力（ゲート付き）に注力したのにゲートが閉じていて不発 ---
+  if (gatedHours >= 300 && gateClosed) {
     if (tier === 'low') {
       return {
         tone: 'misleading',
-        signal:
-          'VA提案に多くの時間を割いたが、数字はまるで動かなかった。「VA提案は成果に効かない活動」——そう結論づけたくなる手応えのなさだ。',
+        signal: `${gatedLabel}に多くの時間を割いたが、数字はまるで動かなかった。「${gatedLabel}は成果に効かない活動」——そう結論づけたくなる手応えのなさだ。`,
         dialogue,
       }
     }
     return {
       tone: 'warning',
-      signal:
-        'VA提案に時間を注いだが、空回りした感覚が残る。効かないのか——それとも、何か前提条件が足りていないのか？',
+      signal: `${gatedLabel}に時間を注いだが、空回りした感覚が残る。効かないのか——それとも、何か前提条件が足りていないのか？`,
       dialogue,
     }
   }
 
   // --- 信頼が低い年は、ヒント自体が曖昧 or ミスリード ---
   if (tier === 'low') {
-    // 偽の手応え：実際には弱い会議/資料に「効いた気がする」と誤認させる
-    const decoy = result.allocation.docs > result.allocation.visit ? 'docs' : 'meeting'
+    // 偽の手応え：実際には弱い活動（年内凹 or ダミー）に「効いた気がする」と誤認させる。
+    const concaveKey = scenario.activityOf.concave
+    const dummyKey = scenario.activityOf.dummy
+    const decoy = result.allocation[concaveKey] >= result.allocation[dummyKey] ? concaveKey : dummyKey
     return {
       tone: 'misleading',
       signal: `ノイズが大きく、何が効いたのか判然としない。強いて言えば${ACTIVITY_LABEL[decoy]}に手応えがあった……気がする（当てにはならない）。`,
@@ -137,20 +160,10 @@ export function generateFeedback(result: YearResult): Feedback {
   }
 
   const certainty = tier === 'high' ? 'はっきりと' : 'なんとなく'
-  const signalByKey: Record<ActivityKey, string> = {
-    va: `VA提案が${certainty}成果に結びついた手応えがある。前提（信頼）が整い、係数が立ち上がっている。`,
-    // 現場訪問は「初めて見る現場ほど数字を動かす」——この手応えが、同じ配分を繰り返した年の
-    //  肩透かしへの伏線になる（飽和そのものは明言しない＝示唆しすぎない）。
-    visit: `現場訪問が${certainty}効いている手応え。初めて足を運んだ現場ほど、見え方が変わって数字に響いた。`,
-    docs: `資料作成が${certainty}効いた感触。会議も少しやりやすくなった気がする（交差項？）。`,
-    meeting: `会議をこなした感はあるが、成果への直結は${certainty}薄いと感じる。`,
-    report: '',
-    develop: '',
-  }
-
+  const topRole = scenario.roleOf[top.key]
   return {
-    tone: top.key === 'va' ? 'positive' : 'neutral',
-    signal: signalByKey[top.key],
+    tone: topRole === 'gated' ? 'positive' : 'neutral',
+    signal: signalForRole(topRole, ACTIVITY_LABEL[top.key], certainty),
     dialogue,
   }
 }

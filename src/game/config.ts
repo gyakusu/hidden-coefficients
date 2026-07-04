@@ -117,6 +117,24 @@ export const PETITION_TRUST_NORM = 0.6
 /** 上申に必要な累積成果。 */
 export const PETITION_CUM_OUTCOME = 55
 
+// ---- 配属シャッフル（改善提案 2026-07 §2）：シードから配属（＝隠れ構造）を生成する。
+//  「形の語彙（6種の応答形状）」は固定。「形と項目の対応」はシードで置換し、
+//  「パラメータ」はこの幅でジッタする。序列（主力≫中堅≫ダミー）は不変条件として保証される。
+//  信頼レート・ゲートの下限側・情報ティアは、詰み配属を避けるため揺らさない（＝信頼の三役は固定）。
+export const SCENARIO_JITTER = {
+  /** 成果係数・上限値（gated.coef / cumulative.valueMax / concave.valueMax / dummy.base）の揺らし幅。 */
+  magnitude: 0.28,
+  /** 時定数（τ）の揺らし幅。 */
+  tau: 0.28,
+  /** VAゲート閾値の揺らし幅（到達可能性を保つため小さめ）。 */
+  gate: 0.14,
+}
+/** ゲート全開閾値のクランプ範囲（必ず信頼投資で到達できる上限に抑える）。 */
+export const SCENARIO_GATE_FULL_RANGE: [number, number] = [0.5, 0.72]
+/** ゲート立ち上がり閾値の下限、および全開閾値との最小マージン。 */
+export const SCENARIO_GATE_START_MIN = 0.15
+export const SCENARIO_GATE_MARGIN = 0.12
+
 // ---- 評価（実力点 → ランク）。市況で運良く伸びた素点ではなく、市況調整後の
 //      実力点でランクを判定する（設計書 §3.4）。calibrate テストで妥当性を担保。----
 export interface Grade {

@@ -23,8 +23,12 @@ function readingGuides(state: GameState): Guide[] {
   const noisePct = Math.round(noiseWidth(tn) * 100)
   const guides: Guide[] = []
 
-  // 初年度はチャートも前回ヒントも無いので、まず方針を一言。
+  // 初年度はチャートも前回ヒントも無いので、まず配属と方針を一言。
   if (state.history.length === 0) {
+    guides.push({
+      icon: 'badge',
+      text: `${state.scenario.dept.name}に配属された。${state.scenario.dept.flavor} 部署が違えば「効く活動」も違う——前の常識は、ここでは当てにならない。`,
+    })
     guides.push({
       icon: 'flag',
       text: 'まだ観測データが1点もない。初年度はどこに賭けても“正解”は見えない——まず1年動かして反応を見よう。',
@@ -80,7 +84,7 @@ function readingGuides(state: GameState): Guide[] {
 export default function ObservationNotes({ state }: { state: GameState }) {
   // 直近年のヒント（レビュー画面で一度見せた定性シグナル）を再掲する。
   const last = state.history.at(-1)
-  const lastFb = last ? generateFeedback(last) : null
+  const lastFb = last ? generateFeedback(last, state.scenario) : null
   const guides = readingGuides(state)
 
   return (
