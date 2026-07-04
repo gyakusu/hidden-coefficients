@@ -1,21 +1,32 @@
 import { useReducer } from 'react'
 import * as C from '../game/config'
 import { applyYear, canPetition, computeYear, initialState } from '../game/engine'
-import type { Allocation, GameState, Hypothesis, YearRecord } from '../game/types'
+import type { Allocation, Durability, GameState, Hypothesis, YearRecord } from '../game/types'
 
 export type GameAction =
   | { type: 'START' }
   | { type: 'RUN_YEAR'; allocation: Allocation }
-  | { type: 'CONTINUE'; hypothesis?: Hypothesis | null }
+  | { type: 'CONTINUE'; hypothesis?: Hypothesis | null; durability?: Durability | null }
   | { type: 'ACK_PROMOTION' }
   | { type: 'PETITION' }
   | { type: 'RESET' }
 
-/** 直近年の履歴レコードに、年度末に宣言した仮説を書き込む。 */
-function withHypothesis(history: YearRecord[], hypothesis: Hypothesis | null): YearRecord[] {
-  if (history.length === 0 || hypothesis == null) return history
+/**
+ * 直近年の履歴レコードに、年度末に宣言した仮説（①どの活動＝which／②来年も効くか＝how）を書き込む。
+ */
+function withHypothesis(
+  history: YearRecord[],
+  hypothesis: Hypothesis | null,
+  durability: Durability | null,
+): YearRecord[] {
+  if (history.length === 0 || (hypothesis == null && durability == null)) return history
   const next = history.slice()
-  next[next.length - 1] = { ...next[next.length - 1], hypothesis }
+  const last = next[next.length - 1]
+  next[next.length - 1] = {
+    ...last,
+    hypothesis: hypothesis ?? last.hypothesis,
+    durability: durability ?? last.durability,
+  }
   return next
 }
 
@@ -33,8 +44,8 @@ function gameReducer(state: GameState, action: GameAction): GameState {
 
     case 'CONTINUE': {
       if (state.phase !== 'review') return state
-      // 年度末レビューで宣言した仮説を、確定した直近年の記録に書き込む。
-      const history = withHypothesis(state.history, action.hypothesis ?? null)
+      // 年度末レビューで宣言した仮説（which / how）を、確定した直近年の記録に書き込む。
+      const history = withHypothesis(state.history, action.hypothesis ?? null, action.durability ?? null)
       const s = { ...state, history }
       if (s.year > C.PLAY_YEARS) {
         return { ...s, phase: 'ended' } // 10年目 = 説明フェーズ

@@ -26,7 +26,6 @@ const ACTIVITY_LABEL: Record<ActivityKey, string> = {
   va: 'VA提案',
   report: '報告',
   develop: '育成',
-  research: '競合調査',
 }
 
 const DIALOGUE: Record<'low' | 'mid' | 'high', string[]> = {
@@ -83,7 +82,7 @@ export function marketInfo(market: number, year: number): MarketInfo {
 
 /** 直接成果に寄与しうるアクティビティのうち、最大寄与のものを返す。 */
 function topContributor(result: YearResult): { key: ActivityKey; value: number } {
-  const keys: ActivityKey[] = ['meeting', 'docs', 'visit', 'va', 'research']
+  const keys: ActivityKey[] = ['meeting', 'docs', 'visit', 'va']
   let best: { key: ActivityKey; value: number } = { key: 'meeting', value: -1 }
   for (const k of keys) {
     if (result.contributions[k] > best.value) best = { key: k, value: result.contributions[k] }
@@ -140,11 +139,11 @@ export function generateFeedback(result: YearResult): Feedback {
   const certainty = tier === 'high' ? 'はっきりと' : 'なんとなく'
   const signalByKey: Record<ActivityKey, string> = {
     va: `VA提案が${certainty}成果に結びついた手応えがある。前提（信頼）が整い、係数が立ち上がっている。`,
-    visit: `現場訪問が${certainty}効いている手応え。足を運んだ分が数字になっている。`,
+    // 現場訪問は「初めて見る現場ほど数字を動かす」——この手応えが、同じ配分を繰り返した年の
+    //  肩透かしへの伏線になる（飽和そのものは明言しない＝示唆しすぎない）。
+    visit: `現場訪問が${certainty}効いている手応え。初めて足を運んだ現場ほど、見え方が変わって数字に響いた。`,
     docs: `資料作成が${certainty}効いた感触。会議も少しやりやすくなった気がする（交差項？）。`,
     meeting: `会議をこなした感はあるが、成果への直結は${certainty}薄いと感じる。`,
-    // 競合調査は「初年度は劇的に効く」——この手応えが2年目以降の裏切りへの伏線になる。
-    research: `競合調査が${certainty}効いた手応え。知らなかった市場の事情が、そのまま数字を押し上げた。`,
     report: '',
     develop: '',
   }

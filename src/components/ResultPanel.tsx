@@ -10,8 +10,15 @@ import { useState } from 'react'
 import * as C from '../game/config'
 import { decompose, trustNorm, trustTier } from '../game/engine'
 import { generateFeedback, marketInfo } from '../game/hints'
-import type { ActivityKey, GameState, Hypothesis, YearResult } from '../game/types'
+import type { ActivityKey, Durability, GameState, Hypothesis, YearResult } from '../game/types'
 import { ACTIVITIES, ACTIVITY_META, Icon, InfoPopover } from './ui'
+
+/** 仮説②（来年も同じだけ効くか）の選択肢。 */
+const DURABILITY_OPTS: { key: Durability; label: string; icon: string }[] = [
+  { key: 'steady', label: '来年も効く', icon: 'trending_flat' },
+  { key: 'weaken', label: '弱まる', icon: 'trending_down' },
+  { key: 'unknown', label: '分からない', icon: 'help' },
+]
 
 const TONE_ICON = {
   positive: 'trending_up',
@@ -22,7 +29,7 @@ const TONE_ICON = {
 
 /** 直接成果に寄与しうる活動のうち最大寄与のキーを返す（high ティアのぼかし表示用）。 */
 function topContributor(result: YearResult): ActivityKey {
-  const keys: ActivityKey[] = ['meeting', 'docs', 'visit', 'va', 'research']
+  const keys: ActivityKey[] = ['meeting', 'docs', 'visit', 'va']
   let best: ActivityKey = 'meeting'
   let bestVal = -Infinity
   for (const k of keys) {
@@ -68,9 +75,16 @@ export default function ResultPanel({
 }: {
   state: GameState
   result: YearResult
-  onContinue: (hypothesis: Hypothesis | null) => void
+  onContinue: (hypothesis: Hypothesis | null, durability: Durability | null) => void
 }) {
   const [hypothesis, setHypothesis] = useState<Hypothesis | null>(null)
+  const [durability, setDurability] = useState<Durability | null>(null)
+
+  // ①の見立てを変える／取り消すとき、②（来年も効くか）が宙に浮かないよう連動して整理する。
+  function chooseHypothesis(next: Hypothesis | null) {
+    setHypothesis(next)
+    if (next == null || next === 'unknown') setDurability(null)
+  }
 
   const fb = generateFeedback(result)
   const isFinal = result.year >= C.PLAY_YEARS
@@ -85,9 +99,15 @@ export default function ResultPanel({
   const envShare = split.market + split.noise // 環境＋運（実力以外）
   const news = marketInfo(result.marketCoef, result.year)
 
+  // 現場の知識（＝累積訪問で積んだ知識ストック）による情報報酬（設計改訂 §1.4）。
+  //  信頼（ブレそのものを縮める）とは別系統：ブレの「読み解き」を助ける。
+  //  K≥TIER1 で今年の運（ランダム係数）の符号、K≥TIER2 で寄与上位1項目が実名で見える。
+  const fieldSign = result.knowledgeAtEnd >= C.VISIT_INFO_TIER_1
+  const fieldTop = result.knowledgeAtEnd >= C.VISIT_INFO_TIER_2
+  const luck = result.randomCoef - 1
+
   const explore = explorationRate(result.allocation, prevRecord?.allocation)
-  const investHours =
-    result.allocation.report + result.allocation.visit + result.allocation.develop + result.allocation.research
+  const investHours = result.allocation.report + result.allocation.visit + result.allocation.develop
   const investRate = investHours / C.TOTAL_HOURS
   const trustValues = state.history.map((r) => trustNorm(r.trustAfter))
   const trustUp =
@@ -195,6 +215,41 @@ export default function ResultPanel({
         )}
       </div>
 
+      {/* 現場で得た読み（信頼とは別系統の情報報酬・知識ストック連動） */}
+      {fieldSign && (
+        <div className="result__field">
+          <span className="result__field-label">
+            <Icon name="explore" size={16} />現場で得た読み
+            <InfoPopover label="現場で得た読みとは" title="現場で得た読み" anchor="parent">
+              現場に足を運んで積み上げた<strong>知識</strong>は、成果を増やすだけでなく
+              <strong>結果の読み解き</strong>も助ける。信頼（ブレそのものを縮める）とは
+              別系統の情報投資だ——通うほど、数字の裏側が少しずつ見えてくる。
+            </InfoPopover>
+          </span>
+          <p className="result__field-body">
+            <Icon name="visibility" size={15} className="result__field-icon" />
+            今年の運（ノイズ）は成果を
+            <b className={luck > 0.02 ? 'is-up' : luck < -0.02 ? 'is-down' : ''}>
+              {luck > 0.02 ? '押し上げる' : luck < -0.02 ? '押し下げる' : 'ほとんど動かさない'}
+            </b>
+            方向に振れていたようだ。
+            {fieldTop && (
+              <>
+                {' '}内訳を見るに、もっとも効いたのは
+                <span
+                  className="result__field-top"
+                  style={{ color: ACTIVITY_META[topContributor(result)].accent }}
+                >
+                  <Icon name={ACTIVITY_META[topContributor(result)].icon} size={15} />
+                  {ACTIVITY_META[topContributor(result)].label}
+                </span>
+                に見える。
+              </>
+            )}
+          </p>
+        </div>
+      )}
+
       {/* 手応えコメント（従来の定性シグナル） */}
       <div className={`result__signal tone-${fb.tone}`}>
         <p className="result__signal-text">
@@ -264,14 +319,15 @@ export default function ResultPanel({
         </ul>
       </div>
 
-      {/* ③ 仮説ノート */}
+      {/* ③ 仮説ノート（which：どの活動が効くか） */}
       <div className="result__hypo">
         <span className="result__hypo-q">
           <Icon name="quiz" size={16} />
           いま、最も成果に効くと思う活動は？
           <InfoPopover label="仮説ノートとは" title="仮説ノート" anchor="parent">
-            毎年の<strong>現時点の見立て</strong>を1つ宣言しておく。正誤はその場では教えない——
+            毎年の<strong>現時点の見立て</strong>を宣言しておく。正誤はその場では教えない——
             エンディングで<strong>9年分の変遷</strong>を真実と並べ、あなたの推定がいつ収束したかを振り返る。
+            見立ては<strong>どの活動（which）</strong>と<strong>来年も効くか（how）</strong>の2軸で残す。
           </InfoPopover>
         </span>
         <div className="result__hypo-opts">
@@ -283,7 +339,7 @@ export default function ResultPanel({
                 type="button"
                 className={`hypo-chip ${on ? 'is-on' : ''}`}
                 style={on ? { borderColor: mmeta.accent, color: mmeta.accent } : undefined}
-                onClick={() => setHypothesis(on ? null : mmeta.key)}
+                onClick={() => chooseHypothesis(on ? null : mmeta.key)}
               >
                 <Icon name={mmeta.icon} size={15} />
                 {mmeta.label}
@@ -293,16 +349,50 @@ export default function ResultPanel({
           <button
             type="button"
             className={`hypo-chip hypo-chip--unknown ${hypothesis === 'unknown' ? 'is-on' : ''}`}
-            onClick={() => setHypothesis(hypothesis === 'unknown' ? null : 'unknown')}
+            onClick={() => chooseHypothesis(hypothesis === 'unknown' ? null : 'unknown')}
           >
             <Icon name="help" size={15} fill={false} />
             まだ分からない
           </button>
         </div>
+
+        {/* 仮説②（how：その活動は来年も同じだけ効くか）。①で具体的な活動を選んだときだけ問う。 */}
+        {hypothesis && hypothesis !== 'unknown' && (
+          <div className="result__hypo2">
+            <span className="result__hypo-q">
+              <Icon name="update" size={16} />
+              その「{ACTIVITY_META[hypothesis].label}」は、来年も同じだけ効くと思う？
+              <InfoPopover label="来年も効くか、とは" title="来年も効くか（how）" anchor="parent">
+                同じ活動でも、効き方は<strong>時期で変わる</strong>ことがある——繰り返すほど飽和したり、
+                前提が整って初めて立ち上がったり。「効いた配分をもう一度」が通用するかを見立てておこう。
+              </InfoPopover>
+            </span>
+            <div className="result__hypo-opts">
+              {DURABILITY_OPTS.map((o) => {
+                const on = durability === o.key
+                return (
+                  <button
+                    key={o.key}
+                    type="button"
+                    className={`hypo-chip hypo-chip--dur ${on ? 'is-on' : ''}`}
+                    onClick={() => setDurability(on ? null : o.key)}
+                  >
+                    <Icon name={o.icon} size={15} fill={o.key !== 'unknown'} />
+                    {o.label}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="result__actions">
-        <button type="button" className="btn btn--primary btn--icon" onClick={() => onContinue(hypothesis)}>
+        <button
+          type="button"
+          className="btn btn--primary btn--icon"
+          onClick={() => onContinue(hypothesis, durability)}
+        >
           {isFinal ? '報告会へ' : '次の年へ'}
           <Icon name="arrow_forward" size={20} />
         </button>

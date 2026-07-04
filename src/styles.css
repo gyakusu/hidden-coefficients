@@ -1426,6 +1426,53 @@ body {
   vertical-align: middle;
 }
 
+/* 現場で得た読み（累積訪問の知識ストックに連動した情報報酬・設計改訂 §1.4） */
+.result__field {
+  position: relative;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--teal);
+}
+.result__field-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+.result__field-label .msym {
+  color: var(--teal);
+}
+.result__field-body {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+}
+.result__field-icon {
+  color: var(--teal);
+  vertical-align: middle;
+  margin-right: 3px;
+}
+.result__field-body b.is-up {
+  color: var(--teal);
+}
+.result__field-body b.is-down {
+  color: var(--danger);
+}
+.result__field-top {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-weight: 700;
+  margin: 0 2px;
+  vertical-align: middle;
+}
+
 .result__process {
   position: relative;
   margin-top: 12px;
@@ -1572,6 +1619,16 @@ body {
   color: var(--text);
   border-color: var(--muted);
 }
+/* 仮説②（how：来年も効くか）。①で活動を選んだときだけ現れる。 */
+.result__hypo2 {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border);
+}
+.hypo-chip--dur.is-on {
+  color: var(--amber);
+  border-color: var(--amber);
+}
 
 /* ---- end screen additions ---- */
 .end__score-sub {
@@ -1662,6 +1719,26 @@ body {
 }
 .end__hypo-mark.is-hold {
   color: var(--muted);
+}
+/* 仮説②（how）の見立てを guess セル内に小さく併記する。 */
+.end__hypo-how {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.end__hypo-how .msym {
+  font-size: 12px;
+}
+.end__hypo-how.is-right {
+  color: var(--teal);
+}
+.end__hypo-how.is-wrong {
+  color: var(--danger);
 }
 .end__hypo-foot {
   margin: 10px 0 0;

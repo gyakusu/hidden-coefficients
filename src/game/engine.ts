@@ -13,7 +13,6 @@ export const ACTIVITY_KEYS: ActivityKey[] = [
   'va',
   'report',
   'develop',
-  'research',
 ]
 
 const clamp = (x: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, x))
@@ -21,8 +20,8 @@ const saturate = (x: number) => clamp(x, 0, 1)
 
 /** computeYear が必要とする状態の最小集合（非定常係数・市況は省略時に既定値）。 */
 type ComputeInput = Pick<GameState, 'year' | 'trust' | 'awareness' | 'promoted'> & {
-  /** ゲーム開始からの累積調査時間（省略時 0）。 */
-  researchCumHours?: number
+  /** ゲーム開始からの累積訪問時間（省略時 0）。 */
+  visitCumHours?: number
   /** 今年の市況係数（省略時 1.0 = 平年並み）。 */
   market?: number
 }
@@ -52,9 +51,9 @@ export function docsValue(docsHours: number): number {
   return C.DOCS_VALUE_MAX * (1 - Math.exp(-Math.max(0, docsHours) / C.DOCS_TAU))
 }
 
-/** 競合調査の知識ストック K = 1 − exp(−累積時間 / TAU)（設計書 §1）。 */
+/** 現場訪問の知識ストック K = 1 − exp(−累積訪問時間 / TAU)（設計改訂 §1）。 */
 export function knowledgeStock(cumHours: number): number {
-  return 1 - Math.exp(-Math.max(0, cumHours) / C.RESEARCH_TAU)
+  return 1 - Math.exp(-Math.max(0, cumHours) / C.VISIT_TAU)
 }
 
 /** 市況係数を1年進める AR(1)（平均回帰・設計書 §3.1）。 */
@@ -82,7 +81,7 @@ export function trustTier(tn: number): 'low' | 'mid' | 'high' {
 
 /** 空の配分を生成。 */
 export function emptyAllocation(): Allocation {
-  return { meeting: 0, docs: 0, visit: 0, va: 0, report: 0, develop: 0, research: 0 }
+  return { meeting: 0, docs: 0, visit: 0, va: 0, report: 0, develop: 0 }
 }
 
 export function totalAllocated(a: Allocation): number {
@@ -92,7 +91,8 @@ export function totalAllocated(a: Allocation): number {
 /**
  * その年の結果を計算する。
  * ゲート・ノイズは「年初時点の信頼」で決まる（＝今年の報告/訪問は主に来年効く遅延報酬）。
- * 競合調査は累積投入の知識ストック差分（フロー）として効き、市況は最後に外生的に掛かる。
+ * 現場訪問は累積投入の知識ストック差分（フロー）として成果に効き、信頼獲得は線形のまま。
+ * 市況は最後に外生的に掛かる。
  */
 export function computeYear(
   state: ComputeInput,
@@ -103,20 +103,20 @@ export function computeYear(
   const gate = vaGate(tn)
   const mCoef = meetingCoefEff(allocation.docs)
 
-  const cumBefore = state.researchCumHours ?? 0
+  // 現場訪問の成果寄与は「累積訪問時間で決まる知識ストックの年内差分（フロー）」。
+  //  初回の訪問は世界の見え方を変えるが、繰り返すほど新たに埋まる知識は減り、逓減する。
+  const cumBefore = state.visitCumHours ?? 0
   const knowledgeAtStart = knowledgeStock(cumBefore)
-  const knowledgeAtEnd = knowledgeStock(cumBefore + allocation.research)
-  // フロー型：その年に「新たに埋まった知識」の差分だけが成果になる。
-  const researchFlow = C.RESEARCH_COEF_MAX * (knowledgeAtEnd - knowledgeAtStart)
+  const knowledgeAtEnd = knowledgeStock(cumBefore + allocation.visit)
+  const visitFlow = C.VISIT_VALUE_MAX * (knowledgeAtEnd - knowledgeAtStart)
 
   const contributions: Record<ActivityKey, number> = {
     meeting: mCoef * allocation.meeting,
     docs: docsValue(allocation.docs),
-    visit: C.COEF.visit * allocation.visit,
+    visit: visitFlow,
     va: C.COEF.va * gate * allocation.va,
     report: C.COEF.report * allocation.report, // = 0
     develop: 0, // 育成は直接成果に効かない（翌年の意識上昇として効く）
-    research: researchFlow,
   }
 
   const baseRaw = ACTIVITY_KEYS.reduce((s, k) => s + contributions[k], 0)
@@ -153,29 +153,30 @@ export function computeYear(
 }
 
 /**
- * 結果を状態に反映し、信頼の減衰・意識の上昇・累積成果・累積調査時間・履歴を更新する。
+ * 結果を状態に反映し、信頼の減衰・意識の上昇・累積成果・累積訪問時間・履歴を更新する。
  * 併せて翌年の市況係数をロールしておく（rng は再現性のため注入可能）。
  */
 export function applyYear(state: GameState, result: YearResult, rng: () => number = Math.random): GameState {
   const trustAfter = state.trust * (1 - C.TRUST_DECAY) + result.trustGain
   const awarenessAfter = state.awareness + result.awarenessGain
   const cumulativeAfter = state.cumulativeOutcome + result.finalOutcome
-  const researchCumAfter = state.researchCumHours + result.allocation.research
+  const visitCumAfter = state.visitCumHours + result.allocation.visit
 
   const record: YearRecord = {
     ...result,
     cumulativeAfter,
     trustAfter,
     awarenessAfter,
-    researchCumAfter,
+    visitCumAfter,
     hypothesis: null,
+    durability: null,
   }
 
   return {
     ...state,
     trust: trustAfter,
     awareness: awarenessAfter,
-    researchCumHours: researchCumAfter,
+    visitCumHours: visitCumAfter,
     market: rollMarket(state.market, rng),
     cumulativeOutcome: cumulativeAfter,
     history: [...state.history, record],
@@ -269,7 +270,7 @@ function legalizeAllocation(alloc: Allocation, minMeeting: number, promoted: boo
   if (a.meeting < minMeeting) {
     let deficit = minMeeting - a.meeting
     a.meeting = minMeeting
-    for (const k of ['va', 'report', 'visit', 'research', 'docs', 'develop'] as ActivityKey[]) {
+    for (const k of ['va', 'report', 'visit', 'docs', 'develop'] as ActivityKey[]) {
       if (deficit <= 0) break
       const take = Math.min(a[k], deficit)
       a[k] -= take
@@ -287,7 +288,7 @@ export function initialState(): GameState {
     awareness: C.AWARENESS_BASE,
     promoted: false,
     constraintsReleased: false,
-    researchCumHours: 0,
+    visitCumHours: 0,
     market: 1.0,
     cumulativeOutcome: 0,
     history: [],

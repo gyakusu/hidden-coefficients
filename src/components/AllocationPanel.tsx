@@ -16,12 +16,12 @@ function defaultAllocation(state: GameState): Allocation {
   const prev = state.history.at(-1)?.allocation
   const base: Allocation = prev
     ? { ...prev }
-    : { meeting: C.MEETING_MIN_HOURS, docs: 0, visit: 0, va: 0, report: 0, develop: 0, research: 0 }
+    : { meeting: C.MEETING_MIN_HOURS, docs: 0, visit: 0, va: 0, report: 0, develop: 0 }
   if (!state.promoted) base.develop = 0
   if (base.meeting < min) base.meeting = min
   // 合計が 2000 を超えていたら会議以外を削る（制約変化への保険）。
   let over = totalAllocated(base) - C.TOTAL_HOURS
-  for (const k of ['develop', 'report', 'docs', 'research', 'va', 'visit'] as ActivityKey[]) {
+  for (const k of ['develop', 'report', 'docs', 'va', 'visit'] as ActivityKey[]) {
     if (over <= 0) break
     const cut = Math.min(base[k], over)
     base[k] -= cut
@@ -137,7 +137,7 @@ export default function AllocationPanel({
   }
 
   function reset() {
-    setDraft({ meeting: min, docs: 0, visit: 0, va: 0, report: 0, develop: 0, research: 0 })
+    setDraft({ meeting: min, docs: 0, visit: 0, va: 0, report: 0, develop: 0 })
   }
 
   return (
