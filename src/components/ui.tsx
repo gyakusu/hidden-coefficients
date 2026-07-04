@@ -19,7 +19,6 @@ export const ACTIVITIES: ActivityMeta[] = [
   { key: 'meeting', label: '会議', note: '2h/回・最低200回必須', accent: '#7c8aa5', icon: 'groups' },
   { key: 'docs', label: '資料作成', note: '任意時間', accent: '#6aa0c4', icon: 'description' },
   { key: 'visit', label: '現場訪問', note: '8h/回・信頼を稼ぐ', accent: '#4db6a8', icon: 'engineering' },
-  { key: 'research', label: '競合調査', note: '8h/回・任意', accent: '#b0c26a', icon: 'travel_explore' },
   { key: 'va', label: 'VA提案', note: '4h/回', accent: '#e0a458', icon: 'lightbulb' },
   { key: 'report', label: '報告', note: '任意時間・信頼を稼ぐ', accent: '#a78bc0', icon: 'campaign' },
   {
@@ -49,9 +48,7 @@ export const ACTIVITY_TIP: Record<ActivityKey, string> = {
   meeting:
     '1回2時間。最低200回（400h）こなす義務があり、満たさないと1年を実行できない。まずノルマを確保しよう。',
   docs: '1時間単位で自由に投下できる。効き目は伏せられている——続けて試し、成果の変化から推し量ろう。ただし「かければかけるほど」とは限らない。',
-  visit: '1回8時間と重め。信頼ptを稼げる活動。成果にどう響くかは観測しながら見極めよう。',
-  research:
-    '1回8時間。市場や競合への理解を積み上げる活動。効き目は伏せられている——ある年に効いた手応えが、翌年も同じとは限らない。投下と成果の関係を観測しよう。',
+  visit: '1回8時間と重め。信頼ptを稼げる活動。成果にどう響くかは観測しながら見極めよう——同じ配分を繰り返した年と、大きく変えた年で、手応えを見比べてみるといい。',
   va: 'すぐ効くとは限らない一手。「効かない」のか、まだ前提条件が足りないだけなのか——早合点せず観測を続けよう。',
   report: '1時間単位で投下でき、信頼ptを効率よく稼げる。信頼は遅れて効いてくる。焦らず積もう。',
   develop: '今年の成果には表れない。翌年以降のすべての成果を底上げする、未来への投資。',

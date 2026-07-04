@@ -3,18 +3,27 @@
 /**
  * 時間の振り先（アクティビティ）。
  * - develop は昇進後のみ解放される。
- * - research（競合調査）は累積投入で「知識ストック」を積む非定常な変数。
+ * - visit（現場訪問）は累積投入で「知識ストック」を積む非定常な変数
+ *   （旧・competitive research の性質を吸収。設計改訂 2026-07 §1）。
  */
-export type ActivityKey = 'meeting' | 'docs' | 'visit' | 'va' | 'report' | 'develop' | 'research'
+export type ActivityKey = 'meeting' | 'docs' | 'visit' | 'va' | 'report' | 'develop'
 
 /** 各アクティビティへの投入時間（h）。合計 = TOTAL_HOURS。 */
 export type Allocation = Record<ActivityKey, number>
 
 /**
- * 年度末に宣言する仮説（「最も成果に効くと思う活動」）。
+ * 年度末に宣言する仮説①（「最も成果に効くと思う活動」= which）。
  * 'unknown' は「まだ分からない」。保存するだけで、正誤はエンディングまで伏せる。
  */
 export type Hypothesis = ActivityKey | 'unknown'
+
+/**
+ * 年度末に宣言する仮説②（「その活動は来年も同じだけ効くと思う？」= how。設計改訂 §2.3）。
+ * - 'steady'  … 来年も同じだけ効く
+ * - 'weaken'  … 弱まる（飽和・逓減する）
+ * - 'unknown' … 分からない
+ */
+export type Durability = 'steady' | 'weaken' | 'unknown'
 
 /** 1年の計算結果（プレイヤーには一部のみ開示される）。 */
 export interface YearResult {
@@ -34,9 +43,9 @@ export interface YearResult {
   trustNormAtStart: number
   /** VA提案ゲートの開き具合 [0,1]。 */
   vaGate: number
-  /** 年初時点の競合調査の知識ストック [0,1]。 */
+  /** 年初時点の現場訪問の知識ストック [0,1]。 */
   knowledgeAtStart: number
-  /** 年末時点の競合調査の知識ストック [0,1]。 */
+  /** 年末時点の現場訪問の知識ストック [0,1]。 */
   knowledgeAtEnd: number
   /** 各アクティビティの基礎成果への寄与（内部値）。 */
   contributions: Record<ActivityKey, number>
@@ -51,10 +60,12 @@ export interface YearRecord extends YearResult {
   cumulativeAfter: number
   trustAfter: number
   awarenessAfter: number
-  /** 年末時点の累積調査時間。 */
-  researchCumAfter: number
-  /** 年度末に宣言した仮説（未回答なら null）。 */
+  /** 年末時点の累積訪問時間（知識ストックの原資）。 */
+  visitCumAfter: number
+  /** 年度末に宣言した仮説①（どの活動が最も効くか＝which。未回答なら null）。 */
   hypothesis: Hypothesis | null
+  /** 年度末に宣言した仮説②（その活動は来年も同じだけ効くか＝how。未回答なら null）。 */
+  durability: Durability | null
 }
 
 export type Phase = 'title' | 'playing' | 'review' | 'promotion' | 'ended'
@@ -71,8 +82,8 @@ export interface GameState {
   promoted: boolean
   /** 上申で会議制約を解除済みか。 */
   constraintsReleased: boolean
-  /** ゲーム開始からの累積調査時間（知識ストックの原資）。 */
-  researchCumHours: number
+  /** ゲーム開始からの累積訪問時間（現場の知識ストックの原資）。 */
+  visitCumHours: number
   /** 今年の市況係数（年初に確定・ニュースで方向のみ開示）。 */
   market: number
   /** 累積部署成果（= 素点。市況込みの最終スコア）。 */

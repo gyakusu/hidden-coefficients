@@ -33,7 +33,7 @@ export default function GameScreen({
           <ResultPanel
             state={state}
             result={state.lastResult}
-            onContinue={(hypothesis) => dispatch({ type: 'CONTINUE', hypothesis })}
+            onContinue={(hypothesis, durability) => dispatch({ type: 'CONTINUE', hypothesis, durability })}
           />
         ) : (
           <AllocationPanel

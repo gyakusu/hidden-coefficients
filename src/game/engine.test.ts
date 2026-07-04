@@ -73,7 +73,7 @@ describe('交差項 資料作成→会議（設計書 §4.3）', () => {
 })
 
 describe('信頼の収支と減衰（設計書 §5.4）', () => {
-  it('報告・現場訪問で信頼が貯まり、毎年減衰する', () => {
+  it('報告・現場訪問で信頼が貯まり、毎年減衰する（訪問の信頼獲得は線形のまま・改訂 §1.2）', () => {
     const s = initialState()
     s.phase = 'playing'
     const a: Allocation = { ...emptyAllocation(), meeting: 400, report: 1000, visit: 600 }
@@ -82,6 +82,16 @@ describe('信頼の収支と減衰（設計書 §5.4）', () => {
     const expectedGain = 1000 * C.REPORT_TRUST_RATE + 600 * C.VISIT_TRUST_RATE
     expect(r.trustGain).toBeCloseTo(expectedGain)
     expect(next.trust).toBeCloseTo(0 * (1 - C.TRUST_DECAY) + expectedGain)
+  })
+
+  it('現場訪問の信頼獲得は、知識ストックが飽和しても線形のまま（成果は飽和しても信頼は稼げる）', () => {
+    const saturated = { year: 5, trust: 0, awareness: 1, promoted: false, visitCumHours: 6000 }
+    const a: Allocation = { ...emptyAllocation(), meeting: 400, visit: 600 }
+    const r = computeYear(saturated, a, noNoise)
+    // 知識ストックはほぼ埋まっており成果寄与は小さいが……
+    expect(r.contributions.visit).toBeLessThan(0.3)
+    // ……信頼獲得は投入時間に線形（飽和と無関係）。
+    expect(r.trustGain).toBeCloseTo(600 * C.VISIT_TRUST_RATE)
   })
 
   it('VAゲート全開には複数年の信頼投資が必要（一気には満たせない）', () => {
@@ -185,6 +195,32 @@ describe('戦略バランスのキャリブレーション', () => {
     // 上級は最高ランク帯に届く。
     expect(sExpert.cumulativeOutcome).toBeGreaterThan(C.GRADES[1].min)
   })
+
+  it('「毎年同じ配分」戦略は「途中で組み替える」戦略に劣る（改訂 §2.2 原則3：反復では非定常の形は活かせない）', () => {
+    // 「効いた配分をもう一度」：序盤に効く現場訪問中心の配分を、9年そのまま繰り返す。
+    const repeatVisit: Strategy = () => fill({ meeting: 400, visit: 1000, report: 600 })
+    // 「途中で組み替える」：序盤は同じ配分で信頼と現場の知識を仕込み、
+    //  現場訪問の飽和に気づいて中盤以降はVAへ組み替える。
+    const regroup: Strategy = (s) => {
+      if (s.year <= 3) return fill({ meeting: 400, visit: 1000, report: 600 })
+      const meeting = s.constraintsReleased ? 0 : 400
+      const free = C.TOTAL_HOURS - meeting
+      return fill({ meeting, va: free * 0.7, report: free * 0.3 })
+    }
+
+    const sRepeat = simulate(repeatVisit)
+    const sRegroup = simulate(regroup)
+
+    // eslint-disable-next-line no-console
+    console.log('REGROUP vs REPEAT:', {
+      repeat: sRepeat.cumulativeOutcome.toFixed(1),
+      regroup: sRegroup.cumulativeOutcome.toFixed(1),
+    })
+
+    // 現場訪問は繰り返すほど成果面が飽和するため、同じ配分の反復は頭打ちになる。
+    // 飽和に気づいて配分を組み替えた側が明確に上回る。
+    expect(sRegroup.cumulativeOutcome).toBeGreaterThan(sRepeat.cumulativeOutcome)
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -207,32 +243,40 @@ describe('資料作成の凹関数化（設計書 §2）', () => {
   })
 })
 
-describe('競合調査の累積サチュレーション（設計書 §1）', () => {
+describe('現場訪問の累積サチュレーション（設計改訂 §1）', () => {
   const base = { year: 1, trust: 0, awareness: 1, promoted: false }
 
-  it('知識ストック K は累積時間で飽和する', () => {
+  it('知識ストック K は累積訪問時間で飽和する', () => {
     expect(knowledgeStock(0)).toBeCloseTo(0)
     expect(knowledgeStock(1e9)).toBeCloseTo(1)
-    expect(knowledgeStock(C.RESEARCH_TAU)).toBeCloseTo(1 - Math.exp(-1))
+    expect(knowledgeStock(C.VISIT_TAU)).toBeCloseTo(1 - Math.exp(-1))
   })
 
-  it('初年度は大きく効くが、2年目に同じ時間を入れても寄与はほぼ消える（フロー型）', () => {
-    const a: Allocation = { ...emptyAllocation(), research: 150 }
-    // 1年目（累積0から）
-    const y1 = computeYear({ ...base, researchCumHours: 0 }, a, noNoise)
-    // 2年目（累積150から、さらに150投入）
-    const y2 = computeYear({ ...base, researchCumHours: 150 }, a, noNoise)
-    expect(y1.contributions.research).toBeGreaterThan(3) // 初回は主力級
-    expect(y2.contributions.research).toBeLessThan(y1.contributions.research * 0.5) // 2回目は激減
+  it('同じ配分でも、初年度は大きく効くが2年目に同じ時間を入れると成果寄与は激減（フロー型・非定常）', () => {
+    const a: Allocation = { ...emptyAllocation(), visit: 600 }
+    // 1年目（累積0から600投入）
+    const y1 = computeYear({ ...base, visitCumHours: 0 }, a, noNoise)
+    // 2年目（累積600から、さらに同じ600投入）
+    const y2 = computeYear({ ...base, visitCumHours: 600 }, a, noNoise)
+    expect(y1.contributions.visit).toBeGreaterThan(5) // 初回は主力級
+    expect(y2.contributions.visit).toBeLessThan(y1.contributions.visit * 0.5) // 「効いた配分をもう一度」は通用しない
   })
 
-  it('applyYear が累積調査時間を積み上げる', () => {
+  it('成果寄与は年初と年末の知識ストック差分に一致する（VISIT_VALUE_MAX × ΔK）', () => {
+    const a: Allocation = { ...emptyAllocation(), visit: 400 }
+    const r = computeYear({ ...base, visitCumHours: 200 }, a, noNoise)
+    expect(r.knowledgeAtStart).toBeCloseTo(knowledgeStock(200))
+    expect(r.knowledgeAtEnd).toBeCloseTo(knowledgeStock(600))
+    expect(r.contributions.visit).toBeCloseTo(C.VISIT_VALUE_MAX * (r.knowledgeAtEnd - r.knowledgeAtStart))
+  })
+
+  it('applyYear が累積訪問時間を積み上げる', () => {
     let s = initialState()
     s.phase = 'playing'
-    const a: Allocation = { ...emptyAllocation(), meeting: 400, research: 800 }
+    const a: Allocation = { ...emptyAllocation(), meeting: 400, visit: 800 }
     const r = computeYear(s, a, noNoise)
     s = applyYear(s, r, noNoise)
-    expect(s.researchCumHours).toBe(800)
+    expect(s.visitCumHours).toBe(800)
   })
 })
 
