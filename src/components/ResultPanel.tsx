@@ -86,9 +86,10 @@ export default function ResultPanel({
     if (next == null || next === 'unknown') setDurability(null)
   }
 
-  const fb = generateFeedback(result)
+  const fb = generateFeedback(result, state.scenario)
   const isFinal = result.year >= C.PLAY_YEARS
   const tier = trustTier(result.trustNormAtStart)
+  const cumParams = state.scenario.params.cumulative
 
   const finished = state.history.at(-1)
   const prevRecord = state.history.at(-2)
@@ -99,15 +100,17 @@ export default function ResultPanel({
   const envShare = split.market + split.noise // 環境＋運（実力以外）
   const news = marketInfo(result.marketCoef, result.year)
 
-  // 現場の知識（＝累積訪問で積んだ知識ストック）による情報報酬（設計改訂 §1.4）。
+  // 現場の知識（＝累積活動で積んだ知識ストック）による情報報酬（設計改訂 §1.4）。
   //  信頼（ブレそのものを縮める）とは別系統：ブレの「読み解き」を助ける。
   //  K≥TIER1 で今年の運（ランダム係数）の符号、K≥TIER2 で寄与上位1項目が実名で見える。
-  const fieldSign = result.knowledgeAtEnd >= C.VISIT_INFO_TIER_1
-  const fieldTop = result.knowledgeAtEnd >= C.VISIT_INFO_TIER_2
+  const fieldSign = result.knowledgeAtEnd >= cumParams.infoTier1
+  const fieldTop = result.knowledgeAtEnd >= cumParams.infoTier2
   const luck = result.randomCoef - 1
 
   const explore = explorationRate(result.allocation, prevRecord?.allocation)
-  const investHours = result.allocation.report + result.allocation.visit + result.allocation.develop
+  // 未来へ張った時間＝信頼源（ゼロ役）＋累積活動＋遅延報酬（育成）。配属で担当活動は変わる。
+  const of = state.scenario.activityOf
+  const investHours = result.allocation[of.zero] + result.allocation[of.cumulative] + result.allocation[of.delayed]
   const investRate = investHours / C.TOTAL_HOURS
   const trustValues = state.history.map((r) => trustNorm(r.trustAfter))
   const trustUp =

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import * as C from '../game/config'
 import { meetingMinHours, totalAllocated } from '../game/engine'
+import { earnsTrust } from '../game/scenario'
 import type { Allocation, ActivityKey, GameState } from '../game/types'
 import { ACTIVITIES, ACTIVITY_TIP, Icon, InfoPopover } from './ui'
 
@@ -192,7 +193,10 @@ export default function AllocationPanel({
               </span>
               <div className="alloc__meta">
                 <span className="alloc__name">{m.label}</span>
-                <span className="alloc__note">{m.note}</span>
+                <span className="alloc__note">
+                  {m.note}
+                  {earnsTrust(state.scenario, m.key) ? '・信頼を稼ぐ' : ''}
+                </span>
                 <InfoPopover label={`${m.label}のヒント`} title={m.label} anchor="parent">
                   {ACTIVITY_TIP[m.key]}
                 </InfoPopover>

@@ -8,7 +8,9 @@ export default function App() {
 
   return (
     <div className="app">
-      {state.phase === 'title' && <TitleScreen onStart={() => dispatch({ type: 'START' })} />}
+      {state.phase === 'title' && (
+        <TitleScreen onStart={(opts) => dispatch({ type: 'START', ...opts })} />
+      )}
 
       {(state.phase === 'playing' || state.phase === 'review' || state.phase === 'promotion') && (
         <GameScreen state={state} dispatch={dispatch} />

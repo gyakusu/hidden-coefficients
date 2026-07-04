@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import * as C from '../game/config'
 import { counterfactualScore, knowledgeStock, skillScore, trustNorm } from '../game/engine'
+import type { Scenario } from '../game/scenario'
 import type { Durability, GameState, Hypothesis } from '../game/types'
 import HistoryChart from './HistoryChart'
 import { ACTIVITY_META, Icon } from './ui'
@@ -9,16 +10,20 @@ function gradeFor(score: number) {
   return C.GRADES.find((g) => score >= g.min) ?? C.GRADES[C.GRADES.length - 1]
 }
 
-function analyze(state: GameState) {
+function analyze(state: GameState, scenario: Scenario) {
   const h = state.history
+  const gatedA = scenario.activityOf.gated
+  const cumA = scenario.activityOf.cumulative
+  const cumTau = scenario.params.cumulative.tau
+  const infoTier2 = scenario.params.cumulative.infoTier2
   const gateStart = h.find((r) => r.vaGate > 0)?.year ?? null
   const gateFull = h.find((r) => r.vaGate >= 1)?.year ?? null
-  const trapYears = h.filter((r) => r.allocation.va >= 300 && r.vaGate < 0.2).map((r) => r.year)
+  const trapYears = h.filter((r) => r.allocation[gatedA] >= 300 && r.vaGate < 0.2).map((r) => r.year)
   const best = h.reduce((a, b) => (b.finalOutcome > a.finalOutcome ? b : a), h[0])
-  const visitYears = h.filter((r) => r.allocation.visit > 0)
-  // 知識ストックが飽和（年初 ≥ TIER2）した後もなお現場訪問へ多く割いた年＝成果面はほぼ空振り。
+  const visitYears = h.filter((r) => r.allocation[cumA] > 0)
+  // 知識ストックが飽和（年初 ≥ TIER2）した後もなお累積活動へ多く割いた年＝成果面はほぼ空振り。
   const visitSaturatedWaste = h
-    .filter((r) => r.knowledgeAtStart >= C.VISIT_INFO_TIER_2 && r.allocation.visit >= 400)
+    .filter((r) => r.knowledgeAtStart >= infoTier2 && r.allocation[cumA] >= 400)
     .map((r) => r.year)
   return {
     gateStart,
@@ -29,23 +34,23 @@ function analyze(state: GameState) {
     finalTrust: trustNorm(state.trust),
     finalAwareness: state.awareness,
     visitYearCount: visitYears.length,
-    visitFinalStock: knowledgeStock(state.visitCumHours),
+    visitFinalStock: knowledgeStock(state.cumHours, cumTau),
     visitSaturatedWaste,
   }
 }
 
-/** 仮説①（which）の答え合わせ：真の主力は VA提案、現場訪問は頼れる二番手。 */
-function hypoVerdict(h: Hypothesis | null): { mark: string; cls: string; note: string } {
+/** 仮説①（which）の答え合わせ：真の主力は「ゲート付き」を担う活動、累積活動は頼れる二番手。 */
+function hypoVerdict(h: Hypothesis | null, scenario: Scenario): { mark: string; cls: string; note: string } {
   if (h == null || h === 'unknown') return { mark: '—', cls: 'is-hold', note: '保留' }
-  if (h === 'va') return { mark: '✓', cls: 'is-right', note: '正解' }
-  if (h === 'visit') return { mark: '△', cls: 'is-near', note: '二番手' }
+  if (h === scenario.activityOf.gated) return { mark: '✓', cls: 'is-right', note: '正解' }
+  if (h === scenario.activityOf.cumulative) return { mark: '△', cls: 'is-near', note: '二番手' }
   return { mark: '✗', cls: 'is-wrong', note: '' }
 }
 
-/** 各活動の「来年も同じだけ効くか」の真実。現場訪問だけが年をまたいで飽和＝弱まる。 */
-function durabilityTruth(h: Hypothesis | null): Durability | null {
+/** 各活動の「来年も同じだけ効くか」の真実。累積活動だけが年をまたいで飽和＝弱まる。 */
+function durabilityTruth(h: Hypothesis | null, scenario: Scenario): Durability | null {
   if (h == null || h === 'unknown') return null
-  return h === 'visit' ? 'weaken' : 'steady'
+  return h === scenario.activityOf.cumulative ? 'weaken' : 'steady'
 }
 
 const DUR_LABEL: Record<Durability, string> = {
@@ -55,9 +60,13 @@ const DUR_LABEL: Record<Durability, string> = {
 }
 
 /** 仮説②（how）の答え合わせ。①で選んだ活動の真の非定常性に照らして判定する。 */
-function durVerdict(h: Hypothesis | null, d: Durability | null): { mark: string; cls: string; label: string } {
+function durVerdict(
+  h: Hypothesis | null,
+  d: Durability | null,
+  scenario: Scenario,
+): { mark: string; cls: string; label: string } {
   const label = d ? DUR_LABEL[d] : '—'
-  const truth = durabilityTruth(h)
+  const truth = durabilityTruth(h, scenario)
   if (d == null || d === 'unknown' || truth == null) return { mark: '', cls: 'is-hold', label }
   return d === truth ? { mark: '✓', cls: 'is-right', label } : { mark: '✗', cls: 'is-wrong', label }
 }
@@ -72,6 +81,67 @@ function RevealName({ icon, color, children }: { icon: string; color: string; ch
   )
 }
 
+/** 成果側4活動（会議・資料作成・現場訪問・VA提案）の、この配属での真の姿を組み立てる。 */
+function outcomeReveal(
+  scenario: Scenario,
+  key: 'meeting' | 'docs' | 'visit' | 'va',
+): { coef: ReactNode; klass: string; desc: ReactNode; highlight?: string } {
+  const role = scenario.roleOf[key]
+  const p = scenario.params
+  const dummyLabel = ACTIVITY_META[scenario.activityOf.dummy].label
+  const concaveLabel = ACTIVITY_META[scenario.activityOf.concave].label
+  // 会議は役割に関わらず「最低200回の出席義務」が絡む（固定制約）。
+  const meetingNote = key === 'meeting' ? '（会議は最低200回の出席義務つき。）' : ''
+
+  switch (role) {
+    case 'gated':
+      return {
+        coef: `${p.gated.coef.toFixed(3)}/h（開）／ 0（閉）`,
+        klass: '真の主力変数',
+        highlight: 'is-key',
+        desc: (
+          <>
+            信頼が閾値（正規化 {p.gated.gateStart.toFixed(2)}〜{p.gated.gateFull.toFixed(2)}）を越えて
+            初めて立ち上がる。「効かない」のではなく前提が足りないだけ、という罠。{meetingNote}
+          </>
+        ),
+      }
+    case 'cumulative':
+      return {
+        coef: `成果 最大 ${p.cumulative.valueMax.toFixed(1)}×ΔK（τ=${Math.round(p.cumulative.tau)}h）／ 信頼 ${p.cumulative.trustRate}/h（線形）`,
+        klass: '非定常（累積飽和）＋信頼源',
+        desc: (
+          <>
+            累積投入で知識ストック K を積み、その年の<strong>差分だけ</strong>が成果に——初回は大きく効くが、
+            繰り返すほど飽和して逓減する。ただし信頼は毎年線形に稼げるので、飽和後は
+            「<strong>信頼維持の一手</strong>」へ役割が変わる（死に枠にはならない）。{meetingNote}
+          </>
+        ),
+      }
+    case 'concave':
+      return {
+        coef: `0 → ${p.concave.valueMax.toFixed(1)}（凹・飽和）`,
+        klass: '弱い変数（逓減）',
+        desc: (
+          <>
+            最初のわずかな投入で大半が出て、作り込むほど逓減（τ={Math.round(p.concave.tau)}h）。かけすぎは悪手。
+            {dummyLabel}の係数を「多少」底上げする交差項も持つ。{meetingNote}
+          </>
+        ),
+      }
+    default: // dummy
+      return {
+        coef: `${p.dummy.base.toFixed(3)}〜${(p.dummy.base + p.concave.boost).toFixed(3)}/h`,
+        klass: 'ほぼ定数（ダミー）',
+        desc: (
+          <>
+            ほぼ定数。{concaveLabel}に時間をかけると「多少」上がるが、誤差。{meetingNote}
+          </>
+        ),
+      }
+  }
+}
+
 export default function EndScreen({
   state,
   onReplay,
@@ -81,17 +151,22 @@ export default function EndScreen({
   onReplay: () => void
   onTitle: () => void
 }) {
+  const scenario = state.scenario
   const rawScore = state.cumulativeOutcome
   const skill = skillScore(state.history)
   const grade = gradeFor(skill) // ランクは実力点（市況調整後）で判定する
-  const counterfactual = counterfactualScore(state.history)
-  const a = analyze(state)
+  const counterfactual = counterfactualScore(state.history, scenario)
+  const a = analyze(state, scenario)
   const m = ACTIVITY_META
+  const gatedLabel = m[scenario.activityOf.gated].label
+  const cumLabel = m[scenario.activityOf.cumulative].label
 
   // 素点と実力点の乖離（＝運・市況がどれだけ結果を動かしたか）。
   const rel = skill > 0 ? (rawScore - skill) / skill : 0
   const divergence = rel > 0.08 ? 'tailwind' : rel < -0.08 ? 'headwind' : 'even'
   const tuition = skill - counterfactual // 探索の授業料（最終配分を貫いた場合との差）
+
+  const outcomeKeys: ('meeting' | 'docs' | 'visit' | 'va')[] = ['meeting', 'docs', 'visit', 'va']
 
   return (
     <div className="end">
@@ -100,6 +175,11 @@ export default function EndScreen({
           <Icon name="menu_book" size={16} />10年目・説明フェーズ
         </p>
         <h1 className="end__h1">10年間の同定、完了。</h1>
+        <p className="end__dept-line">
+          <Icon name="badge" size={15} />
+          配属：<strong>{scenario.dept.name}</strong>
+          <span className="end__seed">{scenario.seedLabel}</span>
+        </p>
 
         <div className={`end__scorecard rank-${grade.rank}`}>
           <div className="end__rank">{grade.rank}</div>
@@ -144,8 +224,8 @@ export default function EndScreen({
           </p>
           <ul className="end__hypo">
             {state.history.map((r) => {
-              const v = hypoVerdict(r.hypothesis)
-              const dv = durVerdict(r.hypothesis, r.durability)
+              const v = hypoVerdict(r.hypothesis, scenario)
+              const dv = durVerdict(r.hypothesis, r.durability, scenario)
               const named = r.hypothesis != null && r.hypothesis !== 'unknown'
               const label = named ? ACTIVITY_META[r.hypothesis as Exclude<Hypothesis, 'unknown'>].label : 'まだ分からない'
               return (
@@ -165,8 +245,9 @@ export default function EndScreen({
             })}
           </ul>
           <p className="end__hypo-foot">
-            真の主力は <strong>VA提案</strong>（前提が整えば）。<strong>現場訪問</strong>は序盤の頼れる二番手だが、
-            成果面は<strong>繰り返すほど飽和</strong>する——同じ配分でも、効き方は時期で変わる。
+            この配属（{scenario.dept.name}）での真の主力は <strong>{gatedLabel}</strong>（前提が整えば）。
+            <strong>{cumLabel}</strong>は序盤の頼れる二番手だが、成果面は<strong>繰り返すほど飽和</strong>する——
+            同じ配分でも、効き方は時期で変わる。<em>別の部署なら、この答えは違う。</em>
           </p>
         </section>
 
@@ -174,21 +255,21 @@ export default function EndScreen({
           <h2><Icon name="insights" size={18} />あなたのプレイ分析</h2>
           <ul className="end__analysis">
             <li>
-              VA提案のゲートが開き始めたのは
+              {gatedLabel}（真の主力）のゲートが開き始めたのは
               {a.gateStart ? <strong> {a.gateStart}年目</strong> : <strong> ついぞ開かなかった</strong>}
               {a.gateFull && <>、全開になったのは <strong>{a.gateFull}年目</strong></>}。
             </li>
             {a.trapYears.length > 0 ? (
               <li className="is-warn">
-                <strong>{a.trapYears.join('・')}年目</strong>は、信頼が足りないままVA提案に注力していた——
+                <strong>{a.trapYears.join('・')}年目</strong>は、信頼が足りないまま{gatedLabel}に注力していた——
                 ゲートが閉じており、その時間の多くは成果にならなかった（罠）。
               </li>
             ) : (
-              <li className="is-ok">信頼が低いままVA提案に賭ける「罠」は、うまく避けられていた。</li>
+              <li className="is-ok">信頼が低いまま主力に賭ける「罠」は、うまく避けられていた。</li>
             )}
             {a.visitYearCount > 0 && (
               <li className={a.visitSaturatedWaste.length > 0 ? 'is-warn' : 'is-ok'}>
-                現場訪問は <strong>{a.visitYearCount}年</strong>使い、現場の知識は
+                {cumLabel}（累積活動）は <strong>{a.visitYearCount}年</strong>使い、知識ストックは
                 <strong> {(a.visitFinalStock * 100).toFixed(0)}%</strong> まで積み上がった。
                 {a.visitSaturatedWaste.length > 0 ? (
                   <>
@@ -221,9 +302,10 @@ export default function EndScreen({
         </section>
 
         <section className="end__section card">
-          <h2><Icon name="lock_open" size={18} />種明かし：隠されていた構造</h2>
+          <h2><Icon name="lock_open" size={18} />種明かし：この配属（{scenario.dept.name}）の隠れ構造</h2>
           <p className="end__reveal-lead">
             あなたが観測していた「成果」は、次の関数に<strong>運（ノイズ）</strong>と<strong>市況</strong>を掛けたものだった。
+            <strong>効き方の“形”は6種で固定</strong>だが、<strong>どの活動がどの形を担うかは配属で入れ替わる</strong>。
           </p>
           <table className="end__table">
             <thead>
@@ -235,34 +317,17 @@ export default function EndScreen({
               </tr>
             </thead>
             <tbody>
-              <tr>
-                <td><RevealName icon={m.meeting.icon} color={m.meeting.accent}>会議</RevealName></td>
-                <td>{C.COEF.meetingBase}〜{(C.COEF.meetingBase + C.COEF.meetingDocsBoost).toFixed(3)}/h</td>
-                <td>ほぼ定数（ダミー）</td>
-                <td>最低200回の縛りで埋めるだけ。資料作成で「多少」上がるが、誤差。</td>
-              </tr>
-              <tr>
-                <td><RevealName icon={m.docs.icon} color={m.docs.accent}>資料作成</RevealName></td>
-                <td>0 → {C.DOCS_VALUE_MAX}（凹・飽和）</td>
-                <td>弱い変数（逓減）</td>
-                <td>最初の1時間で大半が出て、作り込むほど逓減（τ={C.DOCS_TAU}h）。かけすぎは悪手。</td>
-              </tr>
-              <tr>
-                <td><RevealName icon={m.visit.icon} color={m.visit.accent}>現場訪問</RevealName></td>
-                <td>成果 最大 {C.VISIT_VALUE_MAX}×ΔK（τ={C.VISIT_TAU}h）／ 信頼 {C.VISIT_TRUST_RATE}/h（線形）</td>
-                <td>非定常（累積飽和）＋信頼源</td>
-                <td>
-                  累積訪問で知識ストック K を積み、その年の<strong>差分だけ</strong>が成果に——初回は大きく効くが、
-                  繰り返すほど飽和して逓減する。ただし信頼は毎年線形に稼げるので、飽和後は
-                  「<strong>信頼維持の一手</strong>」へ役割が変わる（死に枠にはならない）。
-                </td>
-              </tr>
-              <tr className="is-key">
-                <td><RevealName icon={m.va.icon} color={m.va.accent}>VA提案</RevealName></td>
-                <td>{C.COEF.va}/h（開）／ 0（閉）</td>
-                <td>真の主力変数</td>
-                <td>信頼が閾値（正規化 {C.VA_GATE_START}〜{C.VA_GATE_FULL}）を越えて初めて立ち上がる。</td>
-              </tr>
+              {outcomeKeys.map((k) => {
+                const rev = outcomeReveal(scenario, k)
+                return (
+                  <tr key={k} className={rev.highlight}>
+                    <td><RevealName icon={m[k].icon} color={m[k].accent}>{m[k].label}</RevealName></td>
+                    <td>{rev.coef}</td>
+                    <td>{rev.klass}</td>
+                    <td>{rev.desc}</td>
+                  </tr>
+                )
+              })}
               <tr>
                 <td><RevealName icon={m.report.icon} color={m.report.accent}>報告</RevealName></td>
                 <td>{C.COEF.report}/h</td>
@@ -271,7 +336,7 @@ export default function EndScreen({
               </tr>
               <tr>
                 <td><RevealName icon="diversity_3" color={m.develop.accent}>部署の力</RevealName></td>
-                <td>×{C.AWARENESS_BASE} → 最大 ×{C.AWARENESS_MAX}</td>
+                <td>×{C.AWARENESS_BASE} → 最大 ×{scenario.params.delayed.max}</td>
                 <td>定数 → 変数（昇進）</td>
                 <td>昇進までは固定。育成で初めて動かせる「隠れ倍率」に。</td>
               </tr>
@@ -286,13 +351,18 @@ export default function EndScreen({
           <ul className="end__notes">
             <li>
               <strong>信頼ptの三役：</strong>
-              ①VA係数のゲートを開く ②観測ノイズを縮める（±{C.NOISE_MAX * 100}% → ±{C.NOISE_MIN * 100}%）
+              ①主力（ゲート付き）の係数を開く ②観測ノイズを縮める（±{C.NOISE_MAX * 100}% → ±{C.NOISE_MIN * 100}%）
               ③上申で会議制約を外す。
             </li>
             <li>
               <strong>2種類の不確実性：</strong>
               <em>運（ノイズ）</em>は信頼を積めば縮められる。<em>市況</em>は何をしても縮まない。
               制御できる不確実性は制御し、できないものは「できない」と知る——それが評価の二軸化の意味だ。
+            </li>
+            <li>
+              <strong>配属で答えは変わる：</strong>
+              学んだのは「{gatedLabel}が正解」ではなく、<em>ノイズの奥の構造を推定する“やり方”</em>だ。
+              次の配属では、主力もダミーも別の活動に入れ替わる。
             </li>
           </ul>
         </section>
@@ -307,7 +377,7 @@ export default function EndScreen({
 
         <div className="end__actions">
           <button type="button" className="btn btn--primary btn--big btn--icon" onClick={onReplay}>
-            <Icon name="replay" size={22} />もう一度プレイ
+            <Icon name="replay" size={22} />別の部署でもう一度
           </button>
           <button type="button" className="btn btn--ghost btn--icon" onClick={onTitle}>
             <Icon name="home" size={20} />タイトルへ

@@ -1,10 +1,12 @@
 import { useReducer } from 'react'
 import * as C from '../game/config'
 import { applyYear, canPetition, computeYear, initialState } from '../game/engine'
+import { generateScenario, randomSeed, yearRng } from '../game/scenario'
 import type { Allocation, Durability, GameState, Hypothesis, YearRecord } from '../game/types'
 
 export type GameAction =
-  | { type: 'START' }
+  /** 配属してプレイ開始。seed 指定時は合言葉モード（研修の同期・再現）。 */
+  | { type: 'START'; seed?: string; fromPassphrase?: boolean }
   | { type: 'RUN_YEAR'; allocation: Allocation }
   | { type: 'CONTINUE'; hypothesis?: Hypothesis | null; durability?: Durability | null }
   | { type: 'ACK_PROMOTION' }
@@ -32,14 +34,22 @@ function withHypothesis(
 
 function gameReducer(state: GameState, action: GameAction): GameState {
   switch (action.type) {
-    case 'START':
-      return { ...initialState(), phase: 'playing', year: 1 }
+    case 'START': {
+      // 配属＝隠れ構造をシードから生成する。合言葉があれば研修モード（同期・再現）。
+      const fromPassphrase = !!(action.fromPassphrase && action.seed && action.seed.trim())
+      const seed = fromPassphrase ? action.seed!.trim() : randomSeed()
+      const scenario = generateScenario(seed, fromPassphrase)
+      return { ...initialState(), scenario, phase: 'playing', year: 1 }
+    }
 
     case 'RUN_YEAR': {
       if (state.phase !== 'playing') return state
-      const result = computeYear(state, action.allocation)
+      // ノイズ・市況の系列はシード連動＝同じ配属（合言葉）なら結果まで再現可能（提案 §2.4）。
+      const noiseRng = yearRng(state.scenario.seed, state.year, 'noise')
+      const marketRng = yearRng(state.scenario.seed, state.year, 'market')
+      const result = computeYear(state, action.allocation, noiseRng, state.scenario)
       // 年を進めて結果を確定し、まず「結果レビュー」を見せる。
-      return { ...applyYear(state, result), phase: 'review' }
+      return { ...applyYear(state, result, marketRng, state.scenario), phase: 'review' }
     }
 
     case 'CONTINUE': {

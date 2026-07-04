@@ -85,7 +85,7 @@ describe('信頼の収支と減衰（設計書 §5.4）', () => {
   })
 
   it('現場訪問の信頼獲得は、知識ストックが飽和しても線形のまま（成果は飽和しても信頼は稼げる）', () => {
-    const saturated = { year: 5, trust: 0, awareness: 1, promoted: false, visitCumHours: 6000 }
+    const saturated = { year: 5, trust: 0, awareness: 1, promoted: false, cumHours: 6000 }
     const a: Allocation = { ...emptyAllocation(), meeting: 400, visit: 600 }
     const r = computeYear(saturated, a, noNoise)
     // 知識ストックはほぼ埋まっており成果寄与は小さいが……
@@ -255,16 +255,16 @@ describe('現場訪問の累積サチュレーション（設計改訂 §1）', 
   it('同じ配分でも、初年度は大きく効くが2年目に同じ時間を入れると成果寄与は激減（フロー型・非定常）', () => {
     const a: Allocation = { ...emptyAllocation(), visit: 600 }
     // 1年目（累積0から600投入）
-    const y1 = computeYear({ ...base, visitCumHours: 0 }, a, noNoise)
+    const y1 = computeYear({ ...base, cumHours: 0 }, a, noNoise)
     // 2年目（累積600から、さらに同じ600投入）
-    const y2 = computeYear({ ...base, visitCumHours: 600 }, a, noNoise)
+    const y2 = computeYear({ ...base, cumHours: 600 }, a, noNoise)
     expect(y1.contributions.visit).toBeGreaterThan(5) // 初回は主力級
     expect(y2.contributions.visit).toBeLessThan(y1.contributions.visit * 0.5) // 「効いた配分をもう一度」は通用しない
   })
 
   it('成果寄与は年初と年末の知識ストック差分に一致する（VISIT_VALUE_MAX × ΔK）', () => {
     const a: Allocation = { ...emptyAllocation(), visit: 400 }
-    const r = computeYear({ ...base, visitCumHours: 200 }, a, noNoise)
+    const r = computeYear({ ...base, cumHours: 200 }, a, noNoise)
     expect(r.knowledgeAtStart).toBeCloseTo(knowledgeStock(200))
     expect(r.knowledgeAtEnd).toBeCloseTo(knowledgeStock(600))
     expect(r.contributions.visit).toBeCloseTo(C.VISIT_VALUE_MAX * (r.knowledgeAtEnd - r.knowledgeAtStart))
@@ -276,7 +276,7 @@ describe('現場訪問の累積サチュレーション（設計改訂 §1）', 
     const a: Allocation = { ...emptyAllocation(), meeting: 400, visit: 800 }
     const r = computeYear(s, a, noNoise)
     s = applyYear(s, r, noNoise)
-    expect(s.visitCumHours).toBe(800)
+    expect(s.cumHours).toBe(800)
   })
 })
 

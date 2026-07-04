@@ -17,9 +17,14 @@ export default function StatusBar({ state, year }: { state: GameState; year?: nu
         <Icon name="calendar_month" className="status__year-icon" size={18} />
         <span className="status__year-num">{shownYear}</span>
         <span className="status__year-unit">/ 10年</span>
+        <span className="status__dept">
+          <Icon name="badge" size={13} />{state.scenario.dept.name}
+        </span>
         <InfoPopover label="ゲームの進行について" title="進行" symbol="help" anchor="parent">
-          社会人1〜10年目の全10年。1〜9年目に時間配分を試し、最後の10年目で答え合わせ（種明かし）。
-          試せる回数は限られている——1年1年が貴重な「実験」だ。
+          <p>社会人1〜10年目の全10年。1〜9年目に時間配分を試し、最後の10年目で答え合わせ（種明かし）。
+            試せる回数は限られている——1年1年が貴重な「実験」だ。</p>
+          <p>あなたは<strong>{state.scenario.dept.name}</strong>に配属された。どの活動が効く変数かは
+            <strong>配属ごとに変わる</strong>——前の部署の常識は通用しない。</p>
         </InfoPopover>
       </div>
 
@@ -42,7 +47,7 @@ export default function StatusBar({ state, year }: { state: GameState; year?: nu
           color="#4db6a8"
           info={
             <>
-              <p>報告や現場訪問でじわじわ貯まり、毎年少しずつ減る<strong>遅れて効く資産</strong>。</p>
+              <p><strong>信頼を稼げる活動</strong>を続けるとじわじわ貯まり、毎年少しずつ減る<strong>遅れて効く資産</strong>。</p>
               <p>高いほど成果のブレ（ノイズ）が縮み、数字が読み取りやすくなる。いまは±{noisePct}%。</p>
             </>
           }

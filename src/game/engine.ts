@@ -4,6 +4,8 @@
 // ============================================================================
 
 import * as C from './config'
+import { baseScenario } from './scenario'
+import type { Scenario } from './scenario'
 import type { ActivityKey, Allocation, GameState, YearRecord, YearResult } from './types'
 
 export const ACTIVITY_KEYS: ActivityKey[] = [
@@ -20,8 +22,8 @@ const saturate = (x: number) => clamp(x, 0, 1)
 
 /** computeYear が必要とする状態の最小集合（非定常係数・市況は省略時に既定値）。 */
 type ComputeInput = Pick<GameState, 'year' | 'trust' | 'awareness' | 'promoted'> & {
-  /** ゲーム開始からの累積訪問時間（省略時 0）。 */
-  visitCumHours?: number
+  /** ゲーム開始からの累積活動の投入時間（省略時 0）。 */
+  cumHours?: number
   /** 今年の市況係数（省略時 1.0 = 平年並み）。 */
   market?: number
 }
@@ -36,24 +38,27 @@ export function noiseWidth(tn: number): number {
   return C.NOISE_MIN + (C.NOISE_MAX - C.NOISE_MIN) * (1 - saturate(tn))
 }
 
-/** VA提案ゲートの開き具合 [0,1]（設計書 §4.3）。 */
-export function vaGate(tn: number): number {
-  return saturate((tn - C.VA_GATE_START) / (C.VA_GATE_FULL - C.VA_GATE_START))
+/**
+ * ゲート付き線形の開き具合 [0,1]（設計書 §4.3）。
+ * 標準配属では VA提案の「ゲート」だが、配属によって担う活動は入れ替わる。
+ * 閾値は省略時は標準配属の値（既存テスト互換）、シナリオからは配属ごとの値を渡す。
+ */
+export function vaGate(tn: number, start: number = C.VA_GATE_START, full: number = C.VA_GATE_FULL): number {
+  return saturate((tn - start) / (full - start))
 }
 
-/** 資料作成 → 会議 の交差項を反映した会議の実効係数（設計書 §4.3）。 */
-export function meetingCoefEff(docsHours: number): number {
-  return C.COEF.meetingBase + C.COEF.meetingDocsBoost * saturate(docsHours / C.COEF.docsBoostFullHours)
+/** 年内凹（資料作成型）の寄与。投入に対して逓減する飽和曲線（設計書 §2）。 */
+export function docsValue(
+  hours: number,
+  valueMax: number = C.DOCS_VALUE_MAX,
+  tau: number = C.DOCS_TAU,
+): number {
+  return valueMax * (1 - Math.exp(-Math.max(0, hours) / tau))
 }
 
-/** 資料作成の寄与（凹関数・設計書 §2）。投入に対して逓減する飽和曲線。 */
-export function docsValue(docsHours: number): number {
-  return C.DOCS_VALUE_MAX * (1 - Math.exp(-Math.max(0, docsHours) / C.DOCS_TAU))
-}
-
-/** 現場訪問の知識ストック K = 1 − exp(−累積訪問時間 / TAU)（設計改訂 §1）。 */
-export function knowledgeStock(cumHours: number): number {
-  return 1 - Math.exp(-Math.max(0, cumHours) / C.VISIT_TAU)
+/** 累積凹（現場訪問型）の知識ストック K = 1 − exp(−累積時間 / TAU)（設計改訂 §1）。 */
+export function knowledgeStock(cumHours: number, tau: number = C.VISIT_TAU): number {
+  return 1 - Math.exp(-Math.max(0, cumHours) / tau)
 }
 
 /** 市況係数を1年進める AR(1)（平均回帰・設計書 §3.1）。 */
@@ -90,34 +95,48 @@ export function totalAllocated(a: Allocation): number {
 
 /**
  * その年の結果を計算する。
- * ゲート・ノイズは「年初時点の信頼」で決まる（＝今年の報告/訪問は主に来年効く遅延報酬）。
- * 現場訪問は累積投入の知識ストック差分（フロー）として成果に効き、信頼獲得は線形のまま。
- * 市況は最後に外生的に掛かる。
+ * ゲート・ノイズは「年初時点の信頼」で決まる（＝今年の信頼投資は主に来年効く遅延報酬）。
+ * 各活動が担う「応答形状（役割）」は scenario で決まる（配属シャッフル・改善提案 §2）。
+ * 累積活動は知識ストックの年内差分（フロー）として成果に効き、信頼獲得は線形のまま。
+ * 市況は最後に外生的に掛かる。scenario 省略時は標準配属（調達部）＝現行挙動を再現する。
  */
 export function computeYear(
   state: ComputeInput,
   allocation: Allocation,
   rng: () => number = Math.random,
+  scenario: Scenario = baseScenario(),
 ): YearResult {
   const tn = trustNorm(state.trust)
-  const gate = vaGate(tn)
-  const mCoef = meetingCoefEff(allocation.docs)
+  const p = scenario.params
+  const of = scenario.activityOf
 
-  // 現場訪問の成果寄与は「累積訪問時間で決まる知識ストックの年内差分（フロー）」。
-  //  初回の訪問は世界の見え方を変えるが、繰り返すほど新たに埋まる知識は減り、逓減する。
-  const cumBefore = state.visitCumHours ?? 0
-  const knowledgeAtStart = knowledgeStock(cumBefore)
-  const knowledgeAtEnd = knowledgeStock(cumBefore + allocation.visit)
-  const visitFlow = C.VISIT_VALUE_MAX * (knowledgeAtEnd - knowledgeAtStart)
+  const gatedA = of.gated
+  const cumA = of.cumulative
+  const concaveA = of.concave
+  const dummyA = of.dummy
+  const zeroA = of.zero
+  const delayedA = of.delayed
 
-  const contributions: Record<ActivityKey, number> = {
-    meeting: mCoef * allocation.meeting,
-    docs: docsValue(allocation.docs),
-    visit: visitFlow,
-    va: C.COEF.va * gate * allocation.va,
-    report: C.COEF.report * allocation.report, // = 0
-    develop: 0, // 育成は直接成果に効かない（翌年の意識上昇として効く）
-  }
+  const gate = vaGate(tn, p.gated.gateStart, p.gated.gateFull)
+
+  // 累積活動の成果寄与は「累積投入で決まる知識ストックの年内差分（フロー）」。
+  //  初回は世界の見え方を変えるが、繰り返すほど新たに埋まる知識は減り、逓減する。
+  const cumBefore = state.cumHours ?? 0
+  const knowledgeAtStart = knowledgeStock(cumBefore, p.cumulative.tau)
+  const knowledgeAtEnd = knowledgeStock(cumBefore + allocation[cumA], p.cumulative.tau)
+  const cumFlow = p.cumulative.valueMax * (knowledgeAtEnd - knowledgeAtStart)
+
+  // 年内凹（＝ダミーへの交差項を持つ）の実効ダミー係数。
+  const dummyCoef = p.dummy.base + p.concave.boost * saturate(allocation[concaveA] / p.concave.boostFullHours)
+
+  // 役割ごとの寄与を、担当活動のキーに書き込む（役割⇄活動は全単射）。
+  const contributions: Record<ActivityKey, number> = emptyAllocation()
+  contributions[gatedA] = p.gated.coef * gate * allocation[gatedA]
+  contributions[cumA] = cumFlow
+  contributions[concaveA] = docsValue(allocation[concaveA], p.concave.valueMax, p.concave.tau)
+  contributions[dummyA] = dummyCoef * allocation[dummyA]
+  contributions[zeroA] = 0 // 直接成果ゼロ（信頼源）
+  contributions[delayedA] = 0 // 遅延報酬（翌年の意識上昇として効く）
 
   const baseRaw = ACTIVITY_KEYS.reduce((s, k) => s + contributions[k], 0)
   // チーム意識（部署の力）の倍率。昇進前は定数。
@@ -129,9 +148,10 @@ export function computeYear(
   const marketCoef = state.market ?? 1
   const finalOutcome = base * randomCoef * marketCoef
 
-  const trustGain = allocation.report * C.REPORT_TRUST_RATE + allocation.visit * C.VISIT_TRUST_RATE
+  // 信頼獲得：純粋な信頼源（ゼロ役）＋累積活動（線形・飽和と無関係）。
+  const trustGain = allocation[zeroA] * p.zero.trustRate + allocation[cumA] * p.cumulative.trustRate
   const awarenessGain = state.promoted
-    ? Math.min(C.AWARENESS_MAX - state.awareness, allocation.develop * C.DEVELOP_RATE)
+    ? Math.min(p.delayed.max - state.awareness, allocation[delayedA] * p.delayed.rate)
     : 0
 
   return {
@@ -153,21 +173,27 @@ export function computeYear(
 }
 
 /**
- * 結果を状態に反映し、信頼の減衰・意識の上昇・累積成果・累積訪問時間・履歴を更新する。
+ * 結果を状態に反映し、信頼の減衰・意識の上昇・累積成果・累積活動時間・履歴を更新する。
  * 併せて翌年の市況係数をロールしておく（rng は再現性のため注入可能）。
+ * 累積時間は「累積役の活動」の投入分を積む（scenario 省略時は標準配属＝現場訪問）。
  */
-export function applyYear(state: GameState, result: YearResult, rng: () => number = Math.random): GameState {
+export function applyYear(
+  state: GameState,
+  result: YearResult,
+  rng: () => number = Math.random,
+  scenario: Scenario = baseScenario(),
+): GameState {
   const trustAfter = state.trust * (1 - C.TRUST_DECAY) + result.trustGain
   const awarenessAfter = state.awareness + result.awarenessGain
   const cumulativeAfter = state.cumulativeOutcome + result.finalOutcome
-  const visitCumAfter = state.visitCumHours + result.allocation.visit
+  const cumHoursAfter = state.cumHours + result.allocation[scenario.activityOf.cumulative]
 
   const record: YearRecord = {
     ...result,
     cumulativeAfter,
     trustAfter,
     awarenessAfter,
-    visitCumAfter,
+    cumHoursAfter,
     hypothesis: null,
     durability: null,
   }
@@ -176,7 +202,7 @@ export function applyYear(state: GameState, result: YearResult, rng: () => numbe
     ...state,
     trust: trustAfter,
     awareness: awarenessAfter,
-    visitCumHours: visitCumAfter,
+    cumHours: cumHoursAfter,
     market: rollMarket(state.market, rng),
     cumulativeOutcome: cumulativeAfter,
     history: [...state.history, record],
@@ -230,13 +256,12 @@ export function decompose(r: YearResult): OutcomeSplit {
 /**
  * 反実仮想（設計書 §4.2）：最終年の配分を1年目から貫いていたら？
  * 市況・乱数は実際に起きた系列を再利用し、信頼・意識・ゲートだけ再計算する。
- * 「探索に費やした年数の授業料」を定量化する。
+ * 「探索に費やした年数の授業料」を定量化する。scenario は配属の隠れ構造。
  */
-export function counterfactualScore(history: YearRecord[]): number {
+export function counterfactualScore(history: YearRecord[], scenario: Scenario = baseScenario()): number {
   if (history.length === 0) return 0
   const finalAlloc = history[history.length - 1].allocation
-  let s = initialState()
-  s.phase = 'playing'
+  let s: GameState = { ...initialState(), scenario, phase: 'playing' }
   let cum = 0
   for (const rec of history) {
     if (s.year === C.PROMOTION_YEAR) s.promoted = true
@@ -249,8 +274,9 @@ export function counterfactualScore(history: YearRecord[]): number {
       { ...s, market: rec.marketCoef }, // 市況は外生：実際の系列をそのまま使う
       alloc,
       () => u,
+      scenario,
     )
-    s = applyYear(s, r)
+    s = applyYear(s, r, () => 0.5, scenario)
     cum += r.finalOutcome
   }
   return cum
@@ -288,7 +314,8 @@ export function initialState(): GameState {
     awareness: C.AWARENESS_BASE,
     promoted: false,
     constraintsReleased: false,
-    visitCumHours: 0,
+    scenario: baseScenario(),
+    cumHours: 0,
     market: 1.0,
     cumulativeOutcome: 0,
     history: [],

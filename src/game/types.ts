@@ -1,10 +1,12 @@
 // ---- ゲームの型定義 ----
 
+import type { Scenario } from './scenario'
+
 /**
  * 時間の振り先（アクティビティ）。
  * - develop は昇進後のみ解放される。
- * - visit（現場訪問）は累積投入で「知識ストック」を積む非定常な変数
- *   （旧・competitive research の性質を吸収。設計改訂 2026-07 §1）。
+ * - 各活動が「どの応答形状（役割）を担うか」は配属シナリオで決まる（改善提案 2026-07 §2）。
+ *   例：標準配属（調達部）では va=主力・visit=累積飽和・docs=年内凹・meeting=ダミー。
  */
 export type ActivityKey = 'meeting' | 'docs' | 'visit' | 'va' | 'report' | 'develop'
 
@@ -43,9 +45,9 @@ export interface YearResult {
   trustNormAtStart: number
   /** VA提案ゲートの開き具合 [0,1]。 */
   vaGate: number
-  /** 年初時点の現場訪問の知識ストック [0,1]。 */
+  /** 年初時点の累積活動の知識ストック [0,1]。 */
   knowledgeAtStart: number
-  /** 年末時点の現場訪問の知識ストック [0,1]。 */
+  /** 年末時点の累積活動の知識ストック [0,1]。 */
   knowledgeAtEnd: number
   /** 各アクティビティの基礎成果への寄与（内部値）。 */
   contributions: Record<ActivityKey, number>
@@ -60,8 +62,8 @@ export interface YearRecord extends YearResult {
   cumulativeAfter: number
   trustAfter: number
   awarenessAfter: number
-  /** 年末時点の累積訪問時間（知識ストックの原資）。 */
-  visitCumAfter: number
+  /** 年末時点の累積活動の投入時間（知識ストックの原資）。 */
+  cumHoursAfter: number
   /** 年度末に宣言した仮説①（どの活動が最も効くか＝which。未回答なら null）。 */
   hypothesis: Hypothesis | null
   /** 年度末に宣言した仮説②（その活動は来年も同じだけ効くか＝how。未回答なら null）。 */
@@ -82,8 +84,10 @@ export interface GameState {
   promoted: boolean
   /** 上申で会議制約を解除済みか。 */
   constraintsReleased: boolean
-  /** ゲーム開始からの累積訪問時間（現場の知識ストックの原資）。 */
-  visitCumHours: number
+  /** この配属の隠れ構造（役割⇄項目の対応・係数・部署フレーバー・シード）。 */
+  scenario: Scenario
+  /** ゲーム開始からの累積活動の投入時間（知識ストックの原資）。 */
+  cumHours: number
   /** 今年の市況係数（年初に確定・ニュースで方向のみ開示）。 */
   market: number
   /** 累積部署成果（= 素点。市況込みの最終スコア）。 */
